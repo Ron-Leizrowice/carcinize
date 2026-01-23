@@ -1,0 +1,11 @@
+
+.venv
+__pycache__/
+.ruff_cache/
+.pytest_cache/
+.uv_cache/
+*.egg-info/
+.cache
+.wandb
+.env
+data.csv

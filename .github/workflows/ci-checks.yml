@@ -1,0 +1,58 @@
+name: Check Python
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    paths:
+      - '**'
+  workflow_dispatch:
+  merge_group:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Principle of least privilege
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  ci-checks:
+    name: "Python CI Checks"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # --- Python toolchain (uv) ---
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Sync dependencies and check uv lockfile is up to date
+        run: uv sync --dev --locked
+
+      # --- Quality: lint, format, type-checking, unused deps ---
+      - name: Ruff format
+        run: uv run ruff format . --check --diff
+
+      - name: Ruff check
+        run: uv run ruff check . --diff
+
+      - name: Type checking (Pyrefly)
+        run: uv run pyrefly check .
+
+      - name: Type checking (Ty)
+        run: uv run ty check .
+        continue-on-error: true
+
+      - name: Unused dependencies (Deptry)
+        run: uv run deptry .
+
+      # --- Tests ---
+      - name: Unit tests (PyTest)
+        run: |
+          uv run pytest -v --tb=short -n auto
