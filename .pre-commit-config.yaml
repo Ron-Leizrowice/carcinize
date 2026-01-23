@@ -1,0 +1,87 @@
+fail_fast: false
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-merge-conflict
+        priority: 0
+
+  - repo: https://github.com/crate-ci/typos
+    rev: v1.42.0
+    hooks:
+      - id: typos
+        priority: 0
+
+  - repo: https://github.com/tox-dev/pyproject-fmt
+    rev: "v2.11.1"
+    hooks:
+      - id: pyproject-fmt
+        priority: 0
+
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.9.24
+    hooks:
+      - id: uv-lock
+      - id: uv-sync
+        priority: 0
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.11
+    hooks:
+      - id: ruff-format
+        priority: 0
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+        types_or: [python, pyi]
+        require_serial: true
+        priority: 1
+
+
+
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.47.0
+    hooks:
+      - id: markdownlint-fix
+        args: [--disable, MD013, --]
+        priority: 0
+
+  - repo: local
+    hooks:
+      - id: ty
+        name: ty check
+        entry: ty check .
+        language: system
+        pass_filenames: false
+        types_or: [python, pyi]
+        priority: 1
+
+      - id: sync-codestyle
+        name: Sync STYLEGUIDE.md to agent rule files
+        language: system
+        entry: |
+          bash -c '
+            SRC="STYLEGUIDE.md"
+            CURSOR_DST=".cursor/rules/python.mdc"
+
+            # Read source body
+            SRC_BODY=$(cat "$SRC")
+
+            # Write Cursor file with frontmatter
+            {
+              echo "---"
+              echo "globs: \"*.py\""
+              echo "alwaysApply: false"
+              echo "---"
+              echo "$SRC_BODY"
+            } > "$CURSOR_DST"
+
+            # Auto-stage if changed
+            if ! git diff --quiet "$CURSOR_DST" 2>/dev/null; then
+              git add "$CURSOR_DST"
+              echo "✅ Auto-staged $CURSOR_DST"
+            fi
+          '
+        files: ^STYLEGUIDE\.md$
+        pass_filenames: false
+        priority: 1

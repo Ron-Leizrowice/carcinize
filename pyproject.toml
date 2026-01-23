@@ -1,0 +1,55 @@
+[build-system]
+build-backend = "uv_build"
+requires = [ "uv-build>=0.9" ]
+
+[project]
+name = "carcinize"
+version = "0.1.0"
+description = "Make your python code a little bit rustier."
+readme = "README.md"
+license = "MIT"
+authors = [
+  { name = "Ron Leizrowice", email = "ron.leizrowice@protonmail.com" },
+]
+requires-python = ">=3.14"
+classifiers = [ "Programming Language :: Python :: 3 :: Only", "Programming Language :: Python :: 3.14" ]
+dependencies = [
+  "aiofiles>=25",
+  "orjson>=3",
+  "pydantic>=2",
+  "pyprojroot>=0.3",
+  "rich>=14",
+]
+
+scripts.hello-world = "modern_python_template.cli:hello_world"
+
+[dependency-groups]
+dev = [
+  "deptry>=0.23",
+  "prek>=0.3",
+  "pyproject-fmt>=2",
+  "pytest>=8",
+  "pytest-asyncio>=1",
+  "ruff>=0.14",
+  "ty>=0.0.13",
+]
+
+[tool.uv]
+cache-dir = ".cache/uv"
+
+[tool.pyproject-fmt]
+indent = 2
+keep_full_version = false
+
+[tool.pytest.ini_options]
+testpaths = [ "tests" ]
+python_files = [ "test_*.py", "*_test.py" ]
+python_classes = [ "Test*", "*Test" ]
+xfail_strict = true
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+cache_dir = ".cache/pytest"
+
+[tool.ty.analysis]
+respect-type-ignore-comments = false
