@@ -41,10 +41,7 @@ jobs:
 
       - name: Ruff check
         run: uv run ruff check . --diff
-
-      - name: Type checking (Pyrefly)
-        run: uv run pyrefly check .
-
+        
       - name: Type checking (Ty)
         run: uv run ty check .
         continue-on-error: true

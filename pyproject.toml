@@ -11,17 +11,16 @@ license = "MIT"
 authors = [
   { name = "Ron Leizrowice", email = "ron.leizrowice@protonmail.com" },
 ]
-requires-python = ">=3.14"
-classifiers = [ "Programming Language :: Python :: 3 :: Only", "Programming Language :: Python :: 3.14" ]
-dependencies = [
-  "aiofiles>=25",
-  "orjson>=3",
-  "pydantic>=2",
-  "pyprojroot>=0.3",
-  "rich>=14",
+requires-python = ">=3.12"
+classifiers = [
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
 ]
-
-scripts.hello-world = "modern_python_template.cli:hello_world"
+dependencies = [
+  "pydantic>=2",
+]
 
 [dependency-groups]
 dev = [
