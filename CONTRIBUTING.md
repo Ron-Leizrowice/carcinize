@@ -27,11 +27,16 @@ This project uses [Ruff](https://docs.astral.sh/ruff/) for linting and formattin
 
 ## `ty` (static type checking)
 
-This project uses [ty](https://docs.astral.sh/ty/) for static type checking.
+This project uses [ty](https://docs.astral.sh/ty/) for static type checking. This is not optional, it will be enforced by pre-commit hooks and CI checks. You can check for type errors manually by running:
 
 ```bash
 uv run ty check
 ```
+
+- Do not use `# type: ignore` to suppress errors, fix the underlying issue instead.
+- You may use `cast(...)` as an absolute last resort when there is no rigorous alternative.
+- If you genuinely need to violate type-safety in a specific part of the code because of unavoidable deficiencies of python's lack of comprehensive compile-time type checking, you may use `# ty: ignore[specific-rule]` to suppress the error, but it must be documented with a concrete rationale.
+- Tests which confirm error behaviour are exempt, you may use `cast(...)` or `# ty: ignore` to suppress the error, but it must be clearly documented.
 
 ## `prek` (pre-commit hooks)
 
