@@ -35,22 +35,19 @@ class MutStruct(BaseModel):
     )
 
     @classmethod
-    def default(cls) -> Self:
-        """Return a default instance of the struct."""
-        return cls.model_construct()
+    def try_from[R: JsonValue](cls, data: R) -> Result[Self, ValidationError | TypeError]:
+        """Try to validate the data and return a Result.
 
-    @classmethod
-    def try_from[R: JsonValue](cls, data: R) -> Result[Self, ValidationError]:
-        """Try to validate the data and return a Result."""
+        Accepts either a dict or a JSON string. Returns Err(TypeError) for other input types.
+        """
         try:
             match data:
-                case dict(data):
-                    return Ok(cls.model_validate(data))
-                case str():
-                    return Ok(cls.model_validate_json(data))
+                case dict(d):
+                    return Ok(cls.model_validate(d))
+                case str(s):
+                    return Ok(cls.model_validate_json(s))
                 case _:
-                    return Err(ValidationError("Data is not a valid JSON value"))
-            return Ok(cls.model_validate(data))
+                    return Err(TypeError(f"Expected dict or JSON string, got {type(data).__name__}"))
         except ValidationError as e:
             return Err(e)
 
