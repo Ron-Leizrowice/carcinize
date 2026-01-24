@@ -17,6 +17,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "pydantic" },
+    { name = "pydantic-core" },
 ]
 
 [package.dev-dependencies]
@@ -31,7 +32,10 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pydantic", specifier = ">=2" }]
+requires-dist = [
+    { name = "pydantic", specifier = ">=2" },
+    { name = "pydantic-core", specifier = ">=2" },
+]
 
 [package.metadata.requires-dev]
 dev = [

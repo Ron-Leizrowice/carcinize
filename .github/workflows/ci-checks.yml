@@ -41,15 +41,15 @@ jobs:
 
       - name: Ruff check
         run: uv run ruff check . --diff
-        
+
       - name: Type checking (Ty)
         run: uv run ty check .
         continue-on-error: true
 
       - name: Unused dependencies (Deptry)
-        run: uv run deptry .
+        run: uv run deptry src/
 
       # --- Tests ---
       - name: Unit tests (PyTest)
         run: |
-          uv run pytest -v --tb=short -n auto
+          uv run pytest -v --tb=short

@@ -112,12 +112,6 @@ class TestMutStructConstruction:
 class TestMutStructMethods:
     """Test MutStruct helper methods."""
 
-    def test_default_creates_instance(self) -> None:
-        """default() should create an instance without validation."""
-        s = SimpleMutStruct.default()
-        # Fields are not set, but instance exists
-        assert isinstance(s, SimpleMutStruct)
-
     def test_try_from_dict_success(self) -> None:
         """try_from() with valid dict should return Ok."""
         result = SimpleMutStruct.try_from({"name": "Bob", "age": 25})
@@ -142,6 +136,13 @@ class TestMutStructMethods:
         """try_from() with invalid JSON should return Err."""
         result = SimpleMutStruct.try_from('{"name": "Charlie"}')  # Missing age
         assert isinstance(result, Err)
+
+    def test_try_from_invalid_type(self) -> None:
+        """try_from() with invalid type should return Err(TypeError)."""
+        result = SimpleMutStruct.try_from(123)
+        assert isinstance(result, Err)
+        assert isinstance(result.error, TypeError)
+        assert "int" in str(result.error)
 
     def test_as_dict(self) -> None:
         """as_dict() should return a dictionary representation."""

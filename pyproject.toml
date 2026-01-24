@@ -7,7 +7,7 @@ name = "carcinize"
 version = "0.1.0"
 description = "Make your python code a little bit rustier."
 readme = "README.md"
-license = "MIT"
+license = "WTFPL"
 authors = [
   { name = "Ron Leizrowice", email = "ron.leizrowice@protonmail.com" },
 ]
@@ -20,6 +20,7 @@ classifiers = [
 ]
 dependencies = [
   "pydantic>=2",
+  "pydantic-core>=2",
 ]
 
 [dependency-groups]

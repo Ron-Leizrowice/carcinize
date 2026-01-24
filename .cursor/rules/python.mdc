@@ -143,62 +143,6 @@ A function should either reduce cognitive load or enforce a boundary.
 
 ---
 
-## Package Management (uv)
-
-Use **uv** exclusively for dependency and package management. See [uv](https://docs.astral.sh/uv/) for more information.
-
-### Commands
-
-- Install dependencies: `uv add <package>`
-- Remove dependencies: `uv remove <package>`
-- Sync dependencies: `uv sync`
-- Upgrade dependencies: `uv sync --upgrade`
-- Update lock file: `uv lock`
-
-### Running code and tools
-
-- Run a tool: `uv run pytest`, `uv run ruff`, `uv run ty check`
-- Launch a REPL: `uv run python`
-
-> Prefer running project CLIs via `[project.scripts]` entry points (see below), instead of targeting `.py` files directly.
-
----
-
-## Linting & Formatting (Ruff)
-
-Use **Ruff** exclusively for linting and formatting.
-
-### Ruff instructions
-
-- All Python code must be formatted and linted with Ruff.
-- Never use `# noqa` to suppress errors; fix the underlying issue instead.
-- In tests, it is acceptable to suppress errors with `# noqa: <rule_name>` if the warning is intentional and the test stays readable.
-
-### Ruff commands
-
-- Format code: `uv run ruff format`
-- Lint and auto-fix safe issues: `uv run ruff check --fix`
-
----
-
-## Static Type Checking (ty)
-
-This project uses **ty** for static type checking. See [ty](https://docs.astral.sh/ty/) for more information.
-
-### Ty commands
-
-- Run static type checker: `uv run ty check`
-
-### Ty instructions
-
-- Run `ty` after any significant change set.
-- Always run `ty` at the repo root (changes may affect multiple packages).
-- Not all packages share the same rules; see root `pyproject.toml` for overrides.
-- Never use `# ty: ignore` except in rare, justified cases (e.g., certain tests).
-- You may use `cast(...)` as an absolute last resort when there is no rigorous alternative.
-
----
-
 ## Data Modeling (Strict)
 
 Avoid dictionaries for internal data transfer, domain objects, and config.
@@ -340,15 +284,9 @@ Use Hypothesis when the input space is large or edge cases matter:
 - normalization/escaping
 - merge/diff logic
 
-### Async tests
-
-- Use `pytest-asyncio` for async code.
-- Prefer testing async functions directly.
-- For concurrency, test observable behavior (cancellation propagation, error grouping), not scheduling minutiae.
-
 ---
 
-## Opinionated Library Choices (2025 baseline)
+## Opinionated Library Choices
 
 The goal is consistency and leverage: pick a small set of excellent, well-supported libraries and standardize on them.
 
