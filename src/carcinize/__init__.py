@@ -7,7 +7,6 @@ This package provides Rust-inspired data types for Python:
 - Struct/MutStruct: Pydantic-based structs with Rust-like semantics
 - Iter: Fluent iterator with chainable combinators
 - Lazy/OnceCell: Thread-safe lazy initialization primitives
-- Default: Protocol for types with default values
 """
 
 from carcinize.exceptions import UnwrapError
