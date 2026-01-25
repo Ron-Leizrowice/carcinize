@@ -224,8 +224,12 @@ class TestImmutableStructConstruction:
         assert s.__mutable__ is False
 
 
-class TestNestedImmutability:
-    """Test that immutable Struct validates nested field immutability."""
+class TestNestedFields:
+    """Test Rust-like nested field behavior.
+
+    Like Rust, immutability applies to the binding - nested fields of any type
+    are allowed, but cannot be mutated through the immutable outer struct.
+    """
 
     def test_nested_immutable_struct_allowed(self) -> None:
         """Nested immutable Struct should be allowed."""
@@ -233,33 +237,31 @@ class TestNestedImmutability:
         outer = NestedImmutableStruct(inner=inner, label="outer")
         assert outer.inner.name == "Inner"
 
-    def test_nested_mutable_struct_rejected(self) -> None:
-        """Nested mutable Struct should be rejected."""
+    def test_nested_mutable_struct_allowed(self) -> None:
+        """Nested mutable Struct is allowed (Rust-like behavior).
+
+        Like Rust, the outer immutability prevents mutation through
+        the outer binding, even if the inner type is mutable.
+        """
 
         class OuterWithMutableInner(Struct):
             inner: MutableInner
 
-        with pytest.raises(ValidationError) as exc_info:
-            OuterWithMutableInner(inner=MutableInner(value=42))
+        outer = OuterWithMutableInner(inner=MutableInner(value=42))
+        assert outer.inner.value == 42
 
-        errors = exc_info.value.errors()
-        assert len(errors) == 1
-        assert errors[0]["type"] == "mutable_struct_field"
-        assert errors[0]["loc"] == ("inner",)
+        # Cannot mutate through the outer immutable struct
+        with pytest.raises(ValidationError):
+            outer.inner = MutableInner(value=100)
 
-    def test_nested_mutable_basemodel_rejected(self) -> None:
-        """Nested mutable BaseModel should be rejected."""
+    def test_nested_mutable_basemodel_allowed(self) -> None:
+        """Nested mutable BaseModel is allowed (Rust-like behavior)."""
 
         class OuterWithMutableBaseModel(Struct):
             inner: MutableBaseModel
 
-        with pytest.raises(ValidationError) as exc_info:
-            OuterWithMutableBaseModel(inner=MutableBaseModel(value=42))
-
-        errors = exc_info.value.errors()
-        assert len(errors) == 1
-        assert errors[0]["type"] == "mutable_basemodel_field"
-        assert errors[0]["loc"] == ("inner",)
+        outer = OuterWithMutableBaseModel(inner=MutableBaseModel(value=42))
+        assert outer.inner.value == 42
 
     def test_nested_frozen_basemodel_allowed(self) -> None:
         """Nested frozen BaseModel should be allowed."""
@@ -270,19 +272,14 @@ class TestNestedImmutability:
         outer = OuterWithFrozenBaseModel(inner=FrozenBaseModel(value=42))
         assert outer.inner.value == 42
 
-    def test_nested_mutable_dataclass_rejected(self) -> None:
-        """Nested mutable dataclass should be rejected."""
+    def test_nested_mutable_dataclass_allowed(self) -> None:
+        """Nested mutable dataclass is allowed (Rust-like behavior)."""
 
         class OuterWithMutableDataclass(Struct):
             inner: MutableDataclass
 
-        with pytest.raises(ValidationError) as exc_info:
-            OuterWithMutableDataclass(inner=MutableDataclass(value=42))
-
-        errors = exc_info.value.errors()
-        assert len(errors) == 1
-        assert errors[0]["type"] == "mutable_dataclass_field"
-        assert errors[0]["loc"] == ("inner",)
+        outer = OuterWithMutableDataclass(inner=MutableDataclass(value=42))
+        assert outer.inner.value == 42
 
     def test_nested_frozen_dataclass_allowed(self) -> None:
         """Nested frozen dataclass should be allowed."""
@@ -293,40 +290,35 @@ class TestNestedImmutability:
         outer = OuterWithFrozenDataclass(inner=FrozenDataclass(value=42))
         assert outer.inner.value == 42
 
-    def test_multiple_mutable_fields_collect_all_errors(self) -> None:
-        """Multiple mutable fields should collect all errors."""
+    def test_multiple_nested_types_allowed(self) -> None:
+        """Multiple nested types of any mutability are allowed."""
 
         class MultipleNested(Struct):
             mut_struct: MutableInner
             mut_basemodel: MutableBaseModel
             mut_dataclass: MutableDataclass
 
-        with pytest.raises(ValidationError) as exc_info:
-            MultipleNested(
-                mut_struct=MutableInner(value=1),
-                mut_basemodel=MutableBaseModel(value=2),
-                mut_dataclass=MutableDataclass(value=3),
-            )
+        outer = MultipleNested(
+            mut_struct=MutableInner(value=1),
+            mut_basemodel=MutableBaseModel(value=2),
+            mut_dataclass=MutableDataclass(value=3),
+        )
+        assert outer.mut_struct.value == 1
+        assert outer.mut_basemodel.value == 2
+        assert outer.mut_dataclass.value == 3
 
-        errors = exc_info.value.errors()
-        assert len(errors) == 3
-
-        error_types = {e["type"] for e in errors}
-        assert error_types == {
-            "mutable_struct_field",
-            "mutable_basemodel_field",
-            "mutable_dataclass_field",
-        }
-
-    def test_none_values_are_skipped(self) -> None:
-        """None values should not cause validation errors."""
+    def test_none_values_work(self) -> None:
+        """None values should work for optional fields."""
 
         class WithOptional(Struct):
             inner: MutableInner | None = None
 
-        # Should not raise - None is skipped
         s = WithOptional()
         assert s.inner is None
+
+        s2 = WithOptional(inner=MutableInner(value=42))
+        assert s2.inner is not None
+        assert s2.inner.value == 42
 
 
 class TestImmutableStructInheritsBehavior:
@@ -703,8 +695,12 @@ class TestMutabilityAPI:
         outer = Outer(inner=Inner(value=42))
         assert outer.inner.value == 42
 
-    def test_immutable_struct_rejects_mutable_nested_fields(self) -> None:
-        """Immutable struct should reject mutable nested fields."""
+    def test_immutable_struct_allows_mutable_nested_fields(self) -> None:
+        """Immutable struct allows mutable nested fields (Rust-like).
+
+        Like Rust, immutability is a property of the binding, not the type.
+        The outer frozen struct prevents mutation of its fields.
+        """
 
         class MutableInnerNew(Struct, mut=True):
             value: int
@@ -712,12 +708,12 @@ class TestMutabilityAPI:
         class ImmutableOuter(Struct):
             inner: MutableInnerNew
 
-        with pytest.raises(ValidationError) as exc_info:
-            ImmutableOuter(inner=MutableInnerNew(value=42))
+        outer = ImmutableOuter(inner=MutableInnerNew(value=42))
+        assert outer.inner.value == 42
 
-        errors = exc_info.value.errors()
-        assert len(errors) == 1
-        assert errors[0]["type"] == "mutable_struct_field"
+        # Cannot replace the inner field through the frozen outer
+        with pytest.raises(ValidationError):
+            outer.inner = MutableInnerNew(value=100)
 
     def test_immutable_struct_uses_content_hash(self) -> None:
         """Immutable struct should use content-based hashing."""

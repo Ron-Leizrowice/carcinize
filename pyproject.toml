@@ -4,7 +4,7 @@ requires = [ "uv-build>=0.9" ]
 
 [project]
 name = "carcinize"
-version = "0.1.1"
+version = "0.1.2"
 description = "Make your python code a little bit rustier."
 readme = "README.md"
 license = "WTFPL"
@@ -20,7 +20,6 @@ classifiers = [
 ]
 dependencies = [
   "pydantic>=2",
-  "pydantic-core>=2",
 ]
 
 [dependency-groups]
