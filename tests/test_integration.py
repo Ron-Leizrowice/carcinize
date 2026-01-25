@@ -13,7 +13,6 @@ from carcinize import (
     Err,
     Iter,
     Lazy,
-    MutStruct,
     Nothing,
     Ok,
     OnceCell,
@@ -204,7 +203,7 @@ class TestStructWithResultOption:
     def test_struct_with_optional_fields(self) -> None:
         """Struct can have Option-typed fields."""
 
-        class UserProfile(MutStruct):
+        class UserProfile(Struct, mut=True):
             name: str
             email: Some[str] | Nothing
 
@@ -219,7 +218,7 @@ class TestStructWithResultOption:
     def test_try_from_returns_result(self) -> None:
         """try_from integrates with Result type."""
 
-        class Config(MutStruct):
+        class Config(Struct, mut=True):
             host: str
             port: int
 
@@ -236,7 +235,7 @@ class TestStructWithResultOption:
     def test_parse_list_of_structs(self) -> None:
         """Parse a list of dicts into Structs, collecting errors."""
 
-        class Item(MutStruct):
+        class Item(Struct, mut=True):
             id: int
             name: str
 
@@ -357,7 +356,7 @@ class TestLazyWithOtherTypes:
     def test_lazy_struct_initialization(self) -> None:
         """Lazy can defer expensive Struct construction."""
 
-        class ExpensiveConfig(MutStruct):
+        class ExpensiveConfig(Struct, mut=True):
             values: list[int]
 
         def create_config() -> ExpensiveConfig:
@@ -402,7 +401,7 @@ class TestFullPipelines:
     def test_parse_validate_transform_pipeline(self) -> None:
         """Full pipeline: parse JSON -> validate -> transform -> collect."""
 
-        class UserInput(MutStruct):
+        class UserInput(Struct, mut=True):
             name: str
             age: int
 
@@ -528,7 +527,7 @@ class TestFullPipelines:
     def test_grouped_aggregation(self) -> None:
         """Group structs and aggregate."""
 
-        class Sale(MutStruct):
+        class Sale(Struct, mut=True):
             product: str
             amount: int
 

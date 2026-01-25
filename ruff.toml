@@ -86,10 +86,12 @@ select = [
 ]
 ignore = [
   "COM812",   # Disabled for compatibility with ruff formatter
+  "D105",     # Allow no docstring for magic methods
   "D107",     # Allow no docstring for __init__ methods
   "D202",     # Allow blank lines after function docstrings
   "D203",     # Do not insert an extra linebreak for class docstrings
   "D213",     # We want docstrings to start on the first line, not the second.
+  "E501",     # Allow long lines (we use ruff formatter)
   "N815",     # Allow camelCase attributes (useful for creating pydantic models)
   "S101",     # Allow use of assert statements (unless you are actually using `-O` to optimize your code)
   "SIM102",   # Allow nested if/else blocks (instead of requiring ternary operations)

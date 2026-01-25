@@ -2,8 +2,9 @@
 
 import pytest
 
-from carcinize.option import Nothing, Some, UnwrapError
-from carcinize.result import Err, Ok
+from carcinize._exceptions import UnwrapError
+from carcinize._option import Nothing, Some
+from carcinize._result import Err, Ok
 
 # =============================================================================
 # Some Tests

@@ -23,7 +23,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Never, NoReturn, final
 
-from carcinize.exceptions import UnwrapError
+from carcinize._exceptions import UnwrapError
 
 type Result[T, E: Exception] = Ok[T] | Err[E]
 """Type alias for Result: either Ok[T] or Err[E].

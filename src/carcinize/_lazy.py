@@ -30,8 +30,8 @@ import threading
 from collections.abc import Callable
 from typing import cast
 
-from carcinize.option import Nothing, Option, Some
-from carcinize.result import Err, Ok, Result
+from carcinize._option import Nothing, Option, Some
+from carcinize._result import Err, Ok, Result
 
 
 class OnceCellAlreadyInitializedError(Exception):

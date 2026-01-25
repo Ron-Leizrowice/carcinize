@@ -2,7 +2,8 @@
 
 import pytest
 
-from carcinize.result import Err, Ok, UnwrapError
+from carcinize._exceptions import UnwrapError
+from carcinize._result import Err, Ok
 
 # =============================================================================
 # Ok Tests

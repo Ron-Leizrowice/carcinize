@@ -1,7 +1,7 @@
 """Tests for the Iter fluent iterator."""
 
-from carcinize.iter import Iter
-from carcinize.option import Nothing, Some
+from carcinize._iter import Iter
+from carcinize._option import Nothing, Some
 
 # =============================================================================
 # Transformation Tests
