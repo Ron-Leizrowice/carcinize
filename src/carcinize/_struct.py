@@ -22,12 +22,10 @@ Both include:
 
 from __future__ import annotations
 
-from dataclasses import is_dataclass
 from typing import ClassVar, Final, NoReturn, Self, dataclass_transform
 
-from pydantic import BaseModel, ConfigDict, JsonValue, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, JsonValue, ValidationError
 from pydantic._internal._model_construction import ModelMetaclass
-from pydantic_core import InitErrorDetails, PydanticCustomError
 
 from carcinize._base import RustType
 from carcinize._result import Err, Ok, Result
@@ -115,7 +113,11 @@ def _frozen_setattr(self: BaseModel, name: str, value: object) -> NoReturn:  # t
 
 
 class FrozenStruct(_StructBase):
-    """Immutable struct base class (internal, use `Struct` without `mut`)."""
+    """Immutable struct base class (internal, use `Struct` without `mut`).
+
+    Like Rust, immutability applies to the binding - nested fields of any type
+    are allowed, but cannot be mutated through this immutable struct.
+    """
 
     __mutable__: ClassVar[Final[bool]] = False
     __setattr__ = _frozen_setattr  # type: ignore[method-assign,assignment]
@@ -124,27 +126,6 @@ class FrozenStruct(_StructBase):
         **_BASE_CONFIG,
         frozen=True,
     )
-
-    @model_validator(mode="after")
-    def _validate_immutability(self) -> Self:
-        """Validate that nested fields are also immutable."""
-        errors: list[MutabilityError] = []
-
-        for field_name in type(self).model_fields:
-            field_value = getattr(self, field_name)
-            if field_value is None:
-                continue
-
-            if _is_mutable_object(field_value):
-                errors.append(MutabilityError(field_name, field_value))
-
-        if errors:
-            raise ValidationError.from_exception_data(
-                title=type(self).__name__,
-                line_errors=[e.error_details for e in errors],
-            )
-
-        return self
 
 
 # =============================================================================
@@ -215,76 +196,4 @@ class Struct(_StructBase, metaclass=_StructMeta):
     model_config = ConfigDict(
         **_BASE_CONFIG,
         frozen=True,
-    )
-
-
-# =============================================================================
-# Helper Functions
-# =============================================================================
-
-
-def _is_mutable_object(field_value: object) -> bool:
-    """Check if a field value is mutable (non-frozen BaseModel or dataclass)."""
-    if isinstance(field_value, BaseModel):
-        return not field_value.model_config.get("frozen", False)
-    if is_dataclass(field_value) and not isinstance(field_value, type):
-        return not type(field_value).__dataclass_params__.frozen
-    return False
-
-
-# =============================================================================
-# Errors
-# =============================================================================
-
-
-class StructError(Exception):
-    """Base class for all Struct errors."""
-
-
-class MutabilityError(StructError):
-    """Error raised when an immutable Struct contains a mutable field."""
-
-    def __init__(self, field_name: str, field_value: object) -> None:
-        field_type = type(field_value).__name__
-        self.error_details = InitErrorDetails(
-            type=_make_mutability_error(field_name, field_value),
-            loc=(field_name,),
-            input=field_value,
-        )
-        super().__init__(f"Field '{field_name}' contains mutable {field_type}")
-
-
-_ERROR_TEMPLATE = """Field '{field_name}' contains a mutable {field_type}.
-
-    Either:
-        1. Use `Struct` with `mut=True` if mutability is intended, or
-        2. {guidance}
-    """
-
-
-def _make_mutability_error(field_name: str, field_value: object) -> PydanticCustomError:
-    """Create a PydanticCustomError for mutable field validation."""
-    field_type = type(field_value).__name__
-
-    if isinstance(field_value, _StructBase) and field_value.__mutable__:
-        guidance = f"Change {field_name}'s type to an immutable `Struct`."
-        error_type = "mutable_struct_field"
-    elif isinstance(field_value, BaseModel):
-        guidance = f"Add `frozen=True` to {field_name}'s BaseModel ConfigDict."
-        error_type = "mutable_basemodel_field"
-    elif is_dataclass(field_value) and not isinstance(field_value, type):
-        guidance = f"Add `frozen=True` to {field_name}'s @dataclass decorator."
-        error_type = "mutable_dataclass_field"
-    else:
-        guidance = f"Change {field_name} to an immutable type."
-        error_type = "mutable_field"
-
-    return PydanticCustomError(
-        error_type,
-        _ERROR_TEMPLATE,
-        {
-            "field_name": field_name,
-            "field_type": field_type,
-            "guidance": guidance,
-        },
     )

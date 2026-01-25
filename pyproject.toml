@@ -20,7 +20,6 @@ classifiers = [
 ]
 dependencies = [
   "pydantic>=2",
-  "pydantic-core>=2",
 ]
 
 [dependency-groups]
