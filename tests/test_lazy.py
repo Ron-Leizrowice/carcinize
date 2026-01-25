@@ -5,9 +5,9 @@ import time
 
 import pytest
 
-from carcinize.lazy import Lazy, OnceCell, OnceCellAlreadyInitializedError
-from carcinize.option import Nothing, Some
-from carcinize.result import Err, Ok
+from carcinize._lazy import Lazy, OnceCell, OnceCellAlreadyInitializedError
+from carcinize._option import Nothing, Some
+from carcinize._result import Err, Ok
 
 # =============================================================================
 # OnceCell Tests

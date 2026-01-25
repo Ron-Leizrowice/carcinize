@@ -31,10 +31,11 @@ import itertools
 from collections.abc import Callable, Iterable, Iterator
 from typing import cast
 
-from carcinize.option import Nothing, Option, Some
+from carcinize._base import RustType
+from carcinize._option import Nothing, Option, Some
 
 
-class Iter[T]:
+class Iter[T](RustType):
     """A fluent iterator wrapper with chainable combinators."""
 
     __slots__ = ("_iter",)

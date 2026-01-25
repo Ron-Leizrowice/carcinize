@@ -26,8 +26,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Never, NoReturn, cast, final
 
-from carcinize.exceptions import UnwrapError
-from carcinize.result import Err, Ok
+from carcinize._exceptions import UnwrapError
+from carcinize._result import Err, Ok
 
 type Option[T] = Some[T] | Nothing
 """Type alias for Option: either Some[T] or Nothing."""
