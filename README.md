@@ -83,42 +83,74 @@ name = find_user(1).map(str.upper).unwrap_or("anonymous")
 
 **Methods:** `is_some()`, `is_nothing()`, `unwrap()`, `expect()`, `unwrap_or()`, `unwrap_or_else()`, `map()`, `map_or()`, `map_or_else()`, `and_then()`, `or_else()`, `filter()`, `ok_or()`, `ok_or_else()`, `zip()`
 
-### Struct / MutStruct
+### Struct
 
-Pydantic-based structs with Rust-like semantics. Extra fields are forbidden, strict validation is enabled, and fields are validated on assignment.
+Pydantic-based structs with Rust-like semantics. Immutable by default, use `mut=True` for mutable structs.
 
 ```python
-from carcinize import Struct, MutStruct
+from carcinize import Struct
 
-# Immutable (frozen, hashable)
-class Point(Struct):
-    x: int
-    y: int
+# Immutable by default (like Rust's default)
+class User(Struct):
+    name: str
+    age: int
 
-p = Point(x=1, y=2)
-# p.x = 3  # Error: frozen
+user = User(name="Alice", age=30)
+# user.age = 31  # ValidationError: frozen instance
 
-# Mutable
-class Config(MutStruct):
+# Mutable when you need it
+class Config(Struct, mut=True):
     host: str
     port: int = 8080
 
 config = Config(host="localhost")
-config.port = 9000  # OK
+config.port = 9000  # OK - mutable
+
+# Pattern matching (via __match_args__)
+match user:
+    case User(name, age) if age >= 18:
+        print(f"{name} is an adult")
+    case User(name, _):
+        print(f"{name} is a minor")
+
+# Functional updates (like Rust's struct update syntax)
+updated_user = user.replace(age=31)  # Returns new instance
 
 # Safe parsing with Result
-match Config.try_from({"host": "localhost"}):
-    case Ok(cfg):
-        print(cfg.host)
+match User.try_from({"name": "Bob", "age": 25}):
+    case Ok(u):
+        print(u.name)
     case Err(validation_error):
         print(validation_error)
+
+# Also accepts JSON strings
+User.try_from('{"name": "Charlie", "age": 35}')
 ```
 
-**Methods:** `try_from()`, `clone()`, `as_dict()`, `as_json()`
+**Features:**
 
-`Struct` also enforces deep immutability - nested mutable objects are rejected at construction time.
+- Extra fields forbidden
+- Strict type validation (no coercion)
+- Pattern matching support via `__match_args__`
+- Functional updates via `replace()`
+- `__mutable__` class variable for runtime checks
+- Immutable structs are hashable (can be used in sets/dicts)
 
-Note: `try_from()` accepts either a `dict` or a JSON string. Other types return `Err(TypeError)`.
+**Methods:** `try_from()`, `replace()`, `clone()`, `as_dict()`, `as_json()`
+
+**Rust-like immutability:** Like Rust, immutability applies to the *binding*, not the type. An immutable struct can contain fields of any type - you just can't mutate them through the immutable binding:
+
+```python
+class Inner(Struct, mut=True):
+    value: int
+
+class Outer(Struct):  # Immutable
+    inner: Inner
+
+outer = Outer(inner=Inner(value=42))
+# outer.inner = Inner(value=100)  # Error: can't mutate through outer
+# But inner itself is a mutable type - this is fine, just like Rust
+```
 
 ### Iter
 
@@ -140,6 +172,10 @@ first_even = Iter([1, 3, 4, 5]).find(lambda x: x % 2 == 0)  # Some(4)
 
 # Fold/reduce
 total = Iter([1, 2, 3]).fold(0, lambda acc, x: acc + x)  # 6
+
+# Clone an iterator
+it = Iter([1, 2, 3])
+cloned = it.clone()  # Independent copy
 ```
 
 **Transformations:** `map()`, `filter()`, `filter_map()`, `flat_map()`, `flatten()`, `inspect()`
@@ -172,12 +208,49 @@ expensive_config = Lazy(lambda: load_config_from_disk())
 # ... nothing computed yet ...
 config = expensive_config.get()  # computed once, cached forever
 
+# Check without triggering computation
+expensive_config.is_computed()  # True (after first get())
+expensive_config.get_if_computed()  # Some(config) or Nothing
+
 # OnceCell - write exactly once
 cell: OnceCell[int] = OnceCell()
 cell.get()      # Nothing
 cell.set(42)    # Ok(None)
 cell.get()      # Some(42)
 cell.set(100)   # Err(OnceCellAlreadyInitializedError)
+
+# Initialize with a function if not already set
+value = cell.get_or_init(lambda: compute_default())
+
+# Take the value out, resetting the cell
+taken = cell.take()  # Some(42), cell is now empty
 ```
 
 Both are thread-safe and use double-checked locking for performance.
+
+## Error Handling
+
+All unwrap operations raise `UnwrapError` (importable from `carcinize`) when they fail on the wrong variant:
+
+```python
+from carcinize import Nothing, Err, UnwrapError
+
+try:
+    Nothing().unwrap()
+except UnwrapError as e:
+    print(e)  # "called `unwrap()` on a `Nothing` value"
+
+# Err.unwrap() raises the contained error directly
+try:
+    Err(ValueError("oops")).unwrap()
+except ValueError as e:
+    print(e)  # "oops"
+```
+
+## Type Checking
+
+This library is fully typed and works with type checkers like `mypy`, `pyright`, and `ty`. The `Struct` class uses `@dataclass_transform` to ensure proper type inference for fields.
+
+## License
+
+WTFPL - Do What The F*ck You Want To Public License. Because life's too short for licensing drama.
