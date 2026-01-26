@@ -318,3 +318,43 @@ class TestOptionEquality:
         """Nothing instances should be equal."""
         assert Nothing() == Nothing()
         assert Nothing() != Some(42)
+
+
+class TestOptionCovariance:
+    """Test that Some[T] is covariant in T.
+
+    Some[Subclass] should be assignable to Some[Superclass] since Some is immutable.
+    This matches Rust's Option<T> which is covariant in T.
+    """
+
+    def test_some_covariance_with_subclass(self) -> None:
+        """Some containing a subclass instance should work where superclass is expected."""
+
+        class Animal:
+            pass
+
+        class Cat(Animal):
+            def meow(self) -> str:
+                return "meow"
+
+        def process_animal_option(option: Some[Animal]) -> Animal:
+            return option.unwrap()
+
+        cat_some: Some[Cat] = Some(Cat())
+        # This assignment is valid because Some is covariant in T
+        animal: Animal = process_animal_option(cat_some)
+        assert isinstance(animal, Cat)
+
+    def test_option_covariance_in_collections(self) -> None:
+        """List of Some[Subclass] should work in contexts expecting Some[Superclass]."""
+
+        class Base:
+            value: int = 0
+
+        class Derived(Base):
+            value: int = 99
+
+        options: list[Some[Derived]] = [Some(Derived()), Some(Derived())]
+        # Covariance allows this to work
+        first_value = options[0].unwrap().value
+        assert first_value == 99

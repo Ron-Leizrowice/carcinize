@@ -22,7 +22,7 @@ Install with uv:
 uv add carcinize
 ```
 
-No I won't add examples for `pip`, `poetry`, or god forbid `conda`. It's 2026, grow up and use uv.
+No I won't add examples for `pip`, `poetry`, or god forbid `conda`. It's 2026, grow up and use `uv`.
 
 Requires Python 3.12+.
 
@@ -57,6 +57,13 @@ result = (
 
 **Methods:** `is_ok()`, `is_err()`, `ok()`, `err()`, `unwrap()`, `unwrap_err()`, `expect()`, `expect_err()`, `unwrap_or()`, `unwrap_or_else()`, `map()`, `map_err()`, `map_or()`, `map_or_else()`, `and_then()`, `or_else()`
 
+**Converting to Option:** The `ok()` and `err()` methods return `Option` types, matching Rust's API:
+
+- `Ok(v).ok()` returns `Some(v)`, `Ok(v).err()` returns `Nothing()`
+- `Err(e).ok()` returns `Nothing()`, `Err(e).err()` returns `Some(e)`
+
+**Type variance:** Both `Ok[T]` and `Err[E]` are covariant in their type parameters, meaning `Ok[Subclass]` is a subtype of `Ok[Superclass]` and `Err[SubException]` is a subtype of `Err[SuperException]`. This is safe because both types are immutable, and matches Rust's `Result<T, E>` which is covariant in both type parameters.
+
 ### Option
 
 A type representing an optional value (`Some` or `Nothing`). We use `Nothing` instead of `None` to avoid confusion with Python's `None`.
@@ -82,6 +89,8 @@ name = find_user(1).map(str.upper).unwrap_or("anonymous")
 ```
 
 **Methods:** `is_some()`, `is_nothing()`, `unwrap()`, `expect()`, `unwrap_or()`, `unwrap_or_else()`, `map()`, `map_or()`, `map_or_else()`, `and_then()`, `or_else()`, `filter()`, `ok_or()`, `ok_or_else()`, `zip()`
+
+**Type variance:** `Some[T]` is covariant in `T`, meaning `Some[Subclass]` is a subtype of `Some[Superclass]`. This is safe because `Some` is immutable, and matches Rust's `Option<T>` which is covariant in T.
 
 ### Struct
 

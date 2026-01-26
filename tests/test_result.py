@@ -3,6 +3,7 @@
 import pytest
 
 from carcinize._exceptions import UnwrapError
+from carcinize._option import Nothing, Some
 from carcinize._result import Err, Ok
 
 # =============================================================================
@@ -25,13 +26,16 @@ class TestOkInspection:
 class TestOkExtraction:
     """Test Ok extraction methods."""
 
-    def test_ok_returns_value(self) -> None:
-        """ok() should return the contained value."""
-        assert Ok(42).ok() == 42
+    def test_ok_returns_some(self) -> None:
+        """ok() should return Some(value), matching Rust's Result::ok()."""
+        result = Ok(42).ok()
+        assert isinstance(result, Some)
+        assert result.unwrap() == 42
 
-    def test_err_returns_none(self) -> None:
-        """err() should return None for Ok."""
-        assert Ok(42).err() is None
+    def test_err_returns_nothing(self) -> None:
+        """err() should return Nothing for Ok, matching Rust's Result::err()."""
+        result = Ok(42).err()
+        assert isinstance(result, Nothing)
 
     def test_unwrap_returns_value(self) -> None:
         """unwrap() should return the contained value."""
@@ -128,14 +132,17 @@ class TestErrInspection:
 class TestErrExtraction:
     """Test Err extraction methods."""
 
-    def test_ok_returns_none(self) -> None:
-        """ok() should return None for Err."""
-        assert Err(ValueError("error")).ok() is None
+    def test_ok_returns_nothing(self) -> None:
+        """ok() should return Nothing for Err, matching Rust's Result::ok()."""
+        result = Err(ValueError("error")).ok()
+        assert isinstance(result, Nothing)
 
-    def test_err_returns_error(self) -> None:
-        """err() should return the contained error."""
+    def test_err_returns_some(self) -> None:
+        """err() should return Some(error), matching Rust's Result::err()."""
         err = ValueError("oops")
-        assert Err(err).err() is err
+        result = Err(err).err()
+        assert isinstance(result, Some)
+        assert result.unwrap() is err
 
     def test_unwrap_raises_contained_error(self) -> None:
         """unwrap() should raise the contained error directly."""
@@ -293,3 +300,59 @@ class TestResultEquality:
         assert Err(ValueError("oops")) != Err(ValueError("oops"))  # Different instances
         assert Err(ValueError("oops")) != Err(ValueError("other"))
         assert Err(ValueError("42")) != Ok(42)
+
+
+class TestResultCovariance:
+    """Test that Ok[T] and Err[E] are covariant in their type parameters.
+
+    Ok[Subclass] should be assignable to Ok[Superclass] and
+    Err[SubException] should be assignable to Err[SuperException]
+    since both types are immutable.
+    This matches Rust's Result<T, E> which is covariant in both T and E.
+    """
+
+    def test_ok_covariance_with_subclass(self) -> None:
+        """Ok containing a subclass instance should work where superclass is expected."""
+
+        class Animal:
+            pass
+
+        class Dog(Animal):
+            def bark(self) -> str:
+                return "woof"
+
+        def process_animal_result(result: Ok[Animal]) -> Animal:
+            return result.unwrap()
+
+        dog_ok: Ok[Dog] = Ok(Dog())
+        # This assignment is valid because Ok is covariant in T
+        animal: Animal = process_animal_result(dog_ok)
+        assert isinstance(animal, Dog)
+
+    def test_err_covariance_with_subexception(self) -> None:
+        """Err containing a subexception should work where superexception is expected."""
+
+        class CustomError(ValueError):
+            pass
+
+        def process_error_result(result: Err[ValueError]) -> ValueError:
+            return result.unwrap_err()
+
+        custom_err: Err[CustomError] = Err(CustomError("custom"))
+        # This assignment is valid because Err is covariant in E
+        error: ValueError = process_error_result(custom_err)
+        assert isinstance(error, CustomError)
+
+    def test_result_covariance_in_collections(self) -> None:
+        """List of Ok[Subclass] should work in contexts expecting Ok[Superclass]."""
+
+        class Base:
+            value: int = 0
+
+        class Derived(Base):
+            value: int = 42
+
+        results: list[Ok[Derived]] = [Ok(Derived()), Ok(Derived())]
+        # Covariance allows this to work
+        first_value = results[0].unwrap().value
+        assert first_value == 42
