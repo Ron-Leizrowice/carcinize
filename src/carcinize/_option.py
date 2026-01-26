@@ -18,27 +18,37 @@ match option:
     case Nothing():
         print("Nothing here")
 ```
+
+Type Variance:
+    `Some[T]` is covariant in T, meaning `Some[Subclass]` is a subtype of `Some[Superclass]`.
+    This is safe because `Some` is immutable (frozen dataclass) and matches Rust's
+    behavior where `Option<T>` is covariant in T.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Never, NoReturn, cast, final
+from typing import Never, NoReturn, TypeVar, cast, final
 
 from carcinize._exceptions import UnwrapError
 from carcinize._result import Err, Ok
 
-type Option[T] = Some[T] | Nothing
-"""Type alias for Option: either Some[T] or Nothing."""
+T_co = TypeVar("T_co", covariant=True)
+
+type Option[T_co] = Some[T_co] | Nothing
+"""Type alias for Option: either Some[T] or Nothing.
+
+The type parameter T is covariant, meaning Option[Subclass] is a subtype of Option[Superclass].
+"""
 
 
 @final
 @dataclass(frozen=True, slots=True)
-class Some[T]:
-    """Some variant of Option, containing a value of type T."""
+class Some[T_co]:
+    """Some variant of Option, containing a value of type T (covariant)."""
 
-    value: T
+    value: T_co
 
     def is_some(self) -> bool:
         """Check if this is a Some variant."""
@@ -48,70 +58,70 @@ class Some[T]:
         """Check if this is a Nothing variant."""
         return False
 
-    def unwrap(self) -> T:
+    def unwrap(self) -> T_co:
         """Return the contained value.
 
         Unlike Nothing.unwrap(), this never raises.
         """
         return self.value
 
-    def expect(self, msg: str) -> T:  # noqa: ARG002
+    def expect(self, msg: str) -> T_co:  # noqa: ARG002
         """Return the contained value.
 
         The message is ignored since this is a Some variant.
         """
         return self.value
 
-    def unwrap_or[D](self, default: D) -> T:  # noqa: ARG002
+    def unwrap_or[D](self, default: D) -> T_co:  # noqa: ARG002
         """Return the contained value, ignoring the default."""
         return self.value
 
-    def unwrap_or_else[D](self, f: Callable[[], D]) -> T:  # noqa: ARG002
+    def unwrap_or_else[D](self, f: Callable[[], D]) -> T_co:  # noqa: ARG002
         """Return the contained value, ignoring the fallback function."""
         return self.value
 
-    def map[U](self, f: Callable[[T], U]) -> Some[U]:
+    def map[U](self, f: Callable[[T_co], U]) -> Some[U]:
         """Transform the contained value using the provided function."""
         return Some(f(self.value))
 
-    def map_or[U](self, default: U, f: Callable[[T], U]) -> U:  # noqa: ARG002
+    def map_or[U](self, default: U, f: Callable[[T_co], U]) -> U:  # noqa: ARG002
         """Apply the function to the contained value."""
         return f(self.value)
 
-    def map_or_else[U](self, default_f: Callable[[], U], f: Callable[[T], U]) -> U:  # noqa: ARG002
+    def map_or_else[U](self, default_f: Callable[[], U], f: Callable[[T_co], U]) -> U:  # noqa: ARG002
         """Apply the function to the contained value."""
         return f(self.value)
 
-    def and_then[U](self, f: Callable[[T], Option[U]]) -> Option[U]:
+    def and_then[U](self, f: Callable[[T_co], Option[U]]) -> Option[U]:
         """Call the function with the contained value and return its result.
 
         This is useful for chaining operations that may return Nothing.
         """
         return f(self.value)
 
-    def or_else(self, f: Callable[[], Option[T]]) -> Some[T]:  # noqa: ARG002
+    def or_else(self, f: Callable[[], Option[T_co]]) -> Some[T_co]:  # noqa: ARG002
         """Return self unchanged since this is a Some variant."""
         return self
 
-    def filter(self, predicate: Callable[[T], bool]) -> Option[T]:
+    def filter(self, predicate: Callable[[T_co], bool]) -> Option[T_co]:
         """Return Some if predicate returns True, otherwise Nothing."""
         if predicate(self.value):
             return self
         return Nothing()
 
-    def ok_or[E: Exception](self, err: E) -> Ok[T]:  # noqa: ARG002
+    def ok_or[E: Exception](self, err: E) -> Ok[T_co]:  # noqa: ARG002
         """Convert to Ok since this is a Some variant."""
         return Ok(self.value)
 
-    def ok_or_else[E: Exception](self, err_f: Callable[[], E]) -> Ok[T]:  # noqa: ARG002
+    def ok_or_else[E: Exception](self, err_f: Callable[[], E]) -> Ok[T_co]:  # noqa: ARG002
         """Convert to Ok since this is a Some variant."""
         return Ok(self.value)
 
-    def zip[U](self, other: Option[U]) -> Option[tuple[T, U]]:
+    def zip[U](self, other: Option[U]) -> Option[tuple[T_co, U]]:
         """Combine with another Option into a tuple if both are Some."""
         if isinstance(other, Some):
             # cast needed due to ty limitation with generic dataclass inference
-            return cast(Option[tuple[T, U]], Some((self.value, other.value)))
+            return cast(Option[tuple[T_co, U]], Some((self.value, other.value)))
         return Nothing()
 
 
