@@ -13,10 +13,11 @@ wheels = [
 
 [[package]]
 name = "carcinize"
-version = "0.1.5a0"
+version = "0.1.5"
 source = { editable = "." }
 dependencies = [
     { name = "pydantic" },
+    { name = "pydantic-core" },
 ]
 
 [package.dev-dependencies]
@@ -31,7 +32,10 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pydantic", specifier = ">=2" }]
+requires-dist = [
+    { name = "pydantic", specifier = ">=2" },
+    { name = "pydantic-core", specifier = ">=2" },
+]
 
 [package.metadata.requires-dev]
 dev = [
@@ -41,7 +45,7 @@ dev = [
     { name = "pytest", specifier = ">=8" },
     { name = "pytest-asyncio", specifier = ">=1" },
     { name = "ruff", specifier = ">=0.14" },
-    { name = "ty", specifier = ">=0.0.13" },
+    { name = "ty", specifier = ">=0.0.14" },
 ]
 
 [[package]]
