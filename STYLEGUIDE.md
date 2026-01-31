@@ -170,7 +170,9 @@ Sometimes you do not own the schema (e.g., labels, headers, tags, opaque metadat
 
 ---
 
-## Type System (PEP 695 + Modern Typing)
+## Type System (Python 3.13+ Modern Typing)
+
+This project requires Python 3.13+ and uses modern typing features from PEPs 695, 696, 742, and 758.
 
 ### Core conventions
 
@@ -182,20 +184,62 @@ Sometimes you do not own the schema (e.g., labels, headers, tags, opaque metadat
 
 - Type variables: `def identity[T](x: T) -> T: ...`
 - Constrained: `def clamp[T: (int, float)](x: T, lo: T, hi: T) -> T: ...`
+- Bounded: `def process[E: Exception](err: E) -> str: ...`
 - ParamSpecs: `def timed[**P, R](f: Callable[P, R]) -> Callable[P, R]: ...`
+
+### Type parameter defaults (PEP 696)
+
+Use defaults for optional type parameters to reduce boilerplate:
+
+```python
+# Good: default type parameter
+class Container[T = object]:
+    def __init__(self, value: T) -> None: ...
+
+# Good: function with default
+def parse[T = str](data: bytes, as_type: type[T] = str) -> T: ...
+
+# Callers can omit the type argument when the default is appropriate
+c = Container(42)      # Container[int] inferred
+c = Container[str]()   # Explicit when needed
+```
 
 ### Type aliases
 
-- Use `type`: `type UserId = int`
+- Use `type` statement: `type UserId = int`
+- Aliases are lazily evaluated (PEP 649), so forward references work without quotes
 
-### Narrowing
+### Narrowing (PEP 742)
 
-- Prefer `TypeIs[T]` for narrowing helpers:
-  - `def is_user_id(x: object) -> TypeIs[UserId]: ...`
+- Prefer `TypeIs[T]` over `TypeGuard[T]` for type narrowing:
+  - `TypeIs` narrows in both branches (true → T, false → not T)
+  - `TypeGuard` only narrows in the true branch
+
+```python
+from typing import TypeIs
+
+def is_str_list(val: list[object]) -> TypeIs[list[str]]:
+    return all(isinstance(x, str) for x in val)
+
+def process(items: list[object]) -> None:
+    if is_str_list(items):
+        # items is list[str] here
+        print(items[0].upper())
+    else:
+        # items is still list[object] here (narrowed with TypeIs)
+        pass
+```
 
 ### Overrides
 
 - Use `@override` from `typing` on overridden methods.
+
+### Known type system limitations
+
+Some patterns cannot be fully expressed in Python's type system:
+
+- **Variadic unions**: There's no way to express "the union of all types in `*args`". When a function accepts `*exception_types: type[Exception]`, the return type cannot be `Result[T, E1 | E2 | ...]`. Use the base type (`Exception`) and document the limitation.
+- **Comparable bounds**: Methods like `min()`, `max()`, `sorted()` require comparable types, but there's no standard `SupportsLessThan` bound. Document the requirement in the docstring and accept runtime failures for non-comparable types.
 
 ---
 
@@ -207,8 +251,13 @@ Sometimes you do not own the schema (e.g., labels, headers, tags, opaque metadat
 - Use `isinstance(...)` for simple type checks.
 - Never use `type(x) == MyType`.
 
-### Concurrency errors
+### Exception handling (PEP 758)
 
+- Use bracketless syntax for multiple exceptions (Python 3.14+):
+  - Good: `except ValueError, TypeError:`
+  - Avoid: `except (ValueError, TypeError):`
+- Use parentheses only when capturing with `as`:
+  - `except (ValueError, TypeError) as e:`
 - Use `except*` when handling exception groups from concurrent execution.
 
 ---
