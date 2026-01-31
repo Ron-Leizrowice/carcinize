@@ -13,7 +13,7 @@ from carcinize._exceptions import UnwrapError
 from carcinize._iter import Iter
 from carcinize._lazy import Lazy, OnceCell, OnceCellAlreadyInitializedError
 from carcinize._option import Nothing, Option, Some
-from carcinize._result import Err, Ok, Result
+from carcinize._result import Err, Ok, Result, try_except
 from carcinize._struct import Struct
 
 __all__ = [
@@ -29,4 +29,5 @@ __all__ = [
     "Some",
     "Struct",
     "UnwrapError",
+    "try_except",
 ]
