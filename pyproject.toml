@@ -4,7 +4,7 @@ requires = [ "uv-build>=0.9" ]
 
 [project]
 name = "carcinize"
-version = "0.1.4"
+version = "0.1.5-alpha"
 description = "Make your python code a little bit rustier."
 readme = "README.md"
 license = "WTFPL"
