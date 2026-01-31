@@ -5,9 +5,14 @@ Tests the intersection of multiple functionalities:
 - Struct + Result/Option
 - Lazy/OnceCell + other types
 - Full pipeline scenarios
+- try_except integration
+- Complex method chaining
 """
 
 import threading
+
+import pytest
+from pydantic import ValidationError
 
 from carcinize import (
     Err,
@@ -18,6 +23,7 @@ from carcinize import (
     OnceCell,
     Some,
     Struct,
+    try_except,
 )
 
 # =============================================================================
@@ -610,3 +616,698 @@ class TestThreadSafetyIntegration:
 
         assert call_count == 1
         assert all(r == Ok(42) for r in results)
+
+
+# =============================================================================
+# try_except Integration
+# =============================================================================
+
+
+class TestTryExceptIntegration:
+    """Test try_except with other carcinize types."""
+
+    def test_try_except_with_struct_validation(self) -> None:
+        """try_except captures Struct validation errors."""
+
+        class User(Struct):
+            name: str
+            age: int
+
+        # Valid creation
+        result = try_except(lambda: User(name="Alice", age=30), ValidationError)
+        assert isinstance(result, Ok)
+        assert result.unwrap().name == "Alice"
+
+        # Invalid creation - wrong type (intentionally passing wrong type to test validation)
+        result = try_except(lambda: User(name="Bob", age="not a number"), ValidationError)  # ty: ignore[invalid-argument-type]
+        assert isinstance(result, Err)
+        assert isinstance(result.error, ValidationError)
+
+    def test_try_except_in_iter_pipeline(self) -> None:
+        """try_except can be used within Iter operations."""
+
+        def parse_int(s: str) -> Ok[int] | Err[Exception]:
+            return try_except(lambda: int(s), ValueError)
+
+        data = ["1", "2", "bad", "4", "oops"]
+
+        # Parse all, keeping results
+        results = Iter(data).map(parse_int).collect_list()
+        assert len(results) == 5
+        assert results[0] == Ok(1)
+        assert results[1] == Ok(2)
+        assert isinstance(results[2], Err)
+        assert results[3] == Ok(4)
+        assert isinstance(results[4], Err)
+
+    def test_try_except_with_multiple_exceptions(self) -> None:
+        """try_except catches multiple exception types."""
+
+        def risky_division(a: int, b: int) -> float:
+            if a < 0:
+                raise ValueError("negative not allowed")
+            return a / b
+
+        # Success
+        result = try_except(lambda: risky_division(10, 2), ValueError, ZeroDivisionError)
+        assert result == Ok(5.0)
+
+        # ValueError
+        result = try_except(lambda: risky_division(-1, 2), ValueError, ZeroDivisionError)
+        assert isinstance(result, Err)
+        assert isinstance(result.error, ValueError)
+
+        # ZeroDivisionError
+        result = try_except(lambda: risky_division(10, 0), ValueError, ZeroDivisionError)
+        assert isinstance(result, Err)
+        assert isinstance(result.error, ZeroDivisionError)
+
+    def test_try_except_uncaught_propagates(self) -> None:
+        """Uncaught exceptions propagate through try_except."""
+
+        def raises_type_error() -> int:
+            raise TypeError("unexpected")
+
+        # Only catching ValueError - TypeError should propagate
+        with pytest.raises(TypeError, match="unexpected"):
+            try_except(raises_type_error, ValueError)
+
+    def test_try_except_with_lazy(self) -> None:
+        """try_except works with Lazy initialization."""
+
+        def fallible_init() -> int:
+            return int("42")
+
+        lazy = Lazy(lambda: try_except(fallible_init, ValueError))
+
+        assert not lazy.is_computed()
+        result = lazy.get()
+        assert result == Ok(42)
+        assert lazy.is_computed()
+
+
+# =============================================================================
+# Iter + Struct Sorting and Grouping
+# =============================================================================
+
+
+class TestIterStructSortingGrouping:
+    """Test Iter sorting and grouping operations with Structs."""
+
+    def test_sort_structs_by_field(self) -> None:
+        """Sort structs by a specific field."""
+
+        class Person(Struct):
+            name: str
+            age: int
+
+        people = [
+            Person(name="Charlie", age=30),
+            Person(name="Alice", age=25),
+            Person(name="Bob", age=35),
+        ]
+
+        # Sort by age
+        by_age = Iter(people).sorted_by(lambda p: p.age)
+        assert [p.name for p in by_age] == ["Alice", "Charlie", "Bob"]
+
+        # Sort by name
+        by_name = Iter(people).sorted_by(lambda p: p.name)
+        assert [p.name for p in by_name] == ["Alice", "Bob", "Charlie"]
+
+    def test_sort_structs_reverse(self) -> None:
+        """Sort structs in reverse order."""
+
+        class Score(Struct):
+            player: str
+            points: int
+
+        scores = [
+            Score(player="A", points=100),
+            Score(player="B", points=300),
+            Score(player="C", points=200),
+        ]
+
+        # Sort by points descending (highest first)
+        leaderboard = Iter(scores).sorted_by(lambda s: s.points, reverse=True)
+        assert [s.player for s in leaderboard] == ["B", "C", "A"]
+
+    def test_group_structs_and_aggregate(self) -> None:
+        """Group structs by field and perform aggregation."""
+
+        class Transaction(Struct, mut=True):
+            category: str
+            amount: float
+
+        txns = [
+            Transaction(category="food", amount=25.50),
+            Transaction(category="transport", amount=15.00),
+            Transaction(category="food", amount=30.00),
+            Transaction(category="entertainment", amount=50.00),
+            Transaction(category="food", amount=12.50),
+        ]
+
+        grouped = Iter(txns).group_by(lambda t: t.category)
+
+        # Check grouping
+        assert len(grouped["food"]) == 3
+        assert len(grouped["transport"]) == 1
+        assert len(grouped["entertainment"]) == 1
+
+        # Aggregate totals
+        totals = {cat: sum(t.amount for t in items) for cat, items in grouped.items()}
+        assert totals["food"] == 68.00
+        assert totals["transport"] == 15.00
+
+    def test_unique_structs_by_field(self) -> None:
+        """Deduplicate structs by a specific field."""
+
+        class Event(Struct, mut=True):
+            event_id: int
+            name: str
+            timestamp: int
+
+        # Same event_id but different timestamps (duplicates)
+        events = [
+            Event(event_id=1, name="click", timestamp=100),
+            Event(event_id=2, name="view", timestamp=101),
+            Event(event_id=1, name="click", timestamp=102),  # Duplicate event_id
+            Event(event_id=3, name="purchase", timestamp=103),
+            Event(event_id=2, name="view", timestamp=104),  # Duplicate event_id
+        ]
+
+        unique = Iter(events).unique_by(lambda e: e.event_id).collect_list()
+        assert len(unique) == 3
+        assert [e.event_id for e in unique] == [1, 2, 3]
+
+
+# =============================================================================
+# Option + Result Chaining Edge Cases
+# =============================================================================
+
+
+class TestOptionResultChainingEdgeCases:
+    """Test edge cases in Option and Result chaining."""
+
+    def test_option_filter_then_ok_or(self) -> None:
+        """Chain Option.filter with ok_or conversion."""
+        opt = Some(10)
+
+        # Filter passes -> Ok
+        result = opt.filter(lambda x: x > 5).ok_or(ValueError("too small"))
+        assert result == Ok(10)
+
+        # Filter fails -> Err
+        result = opt.filter(lambda x: x > 20).ok_or(ValueError("too small"))
+        assert isinstance(result, Err)
+
+    def test_result_and_then_returning_err(self) -> None:
+        """and_then can transform Ok to Err."""
+
+        def validate_positive(n: int) -> Ok[int] | Err[ValueError]:
+            if n > 0:
+                return Ok(n)
+            return Err(ValueError("must be positive"))
+
+        # Ok -> Ok
+        result = Ok(5).and_then(validate_positive)
+        assert result == Ok(5)
+
+        # Ok -> Err
+        result = Ok(-5).and_then(validate_positive)
+        assert isinstance(result, Err)
+
+    def test_option_or_else_chain(self) -> None:
+        """Chain multiple or_else for fallback logic."""
+
+        def try_primary() -> Some[str] | Nothing:
+            return Nothing()
+
+        def try_secondary() -> Some[str] | Nothing:
+            return Nothing()
+
+        def try_tertiary() -> Some[str] | Nothing:
+            return Some("tertiary")
+
+        result = try_primary().or_else(try_secondary).or_else(try_tertiary)
+        assert result == Some("tertiary")
+
+    def test_result_map_err_chain(self) -> None:
+        """Chain map_err to transform error types."""
+
+        class LowLevelError(Exception):
+            pass
+
+        class HighLevelError(Exception):
+            def __init__(self, cause: Exception) -> None:
+                self.cause = cause
+                super().__init__(f"High level error: {cause}")
+
+        err: Ok[int] | Err[LowLevelError] = Err(LowLevelError("disk full"))
+        transformed = err.map_err(lambda e: HighLevelError(e))
+
+        assert isinstance(transformed, Err)
+        assert isinstance(transformed.error, HighLevelError)
+        assert isinstance(transformed.error.cause, LowLevelError)
+
+
+# =============================================================================
+# Iter Window and Chunk Operations with Structs
+# =============================================================================
+
+
+class TestIterAdvancedOperations:
+    """Test advanced Iter operations with Struct elements."""
+
+    def test_iter_batched_processing(self) -> None:
+        """Process structs in batches."""
+
+        class Item(Struct, mut=True):
+            id: int
+            processed: bool = False
+
+        items = [Item(id=i) for i in range(10)]
+
+        # Process in batches of 3
+        batches = Iter(items).batched(3).collect_list()
+
+        assert len(batches) == 4  # 3 + 3 + 3 + 1
+        assert len(batches[0]) == 3
+        assert len(batches[3]) == 1
+
+    def test_iter_window_pairs(self) -> None:
+        """Use window to create pairs for comparison."""
+
+        class Measurement(Struct):
+            timestamp: int
+            value: float
+
+        measurements = [
+            Measurement(timestamp=1, value=10.0),
+            Measurement(timestamp=2, value=15.0),
+            Measurement(timestamp=3, value=12.0),
+            Measurement(timestamp=4, value=18.0),
+        ]
+
+        # Calculate deltas using windows
+        windows = Iter(measurements).window(2).collect_list()
+        deltas = [(w[1].value - w[0].value) for w in windows]
+
+        assert deltas == [5.0, -3.0, 6.0]
+
+    def test_iter_take_and_skip(self) -> None:
+        """Use take and skip for pagination-like behavior."""
+
+        class Item(Struct, mut=True):
+            id: int
+            name: str
+
+        items = [Item(id=i, name=f"item_{i}") for i in range(10)]
+
+        # Take first 3
+        first_page = Iter(items).take(3).collect_list()
+        assert len(first_page) == 3
+        assert [i.id for i in first_page] == [0, 1, 2]
+
+        # Skip first 3, take next 3
+        second_page = Iter(items).skip(3).take(3).collect_list()
+        assert len(second_page) == 3
+        assert [i.id for i in second_page] == [3, 4, 5]
+
+    def test_iter_zip_structs(self) -> None:
+        """Zip two struct iterators together."""
+
+        class Key(Struct):
+            id: int
+
+        class Value(Struct):
+            data: str
+
+        keys = [Key(id=1), Key(id=2), Key(id=3)]
+        values = [Value(data="a"), Value(data="b"), Value(data="c")]
+
+        pairs = Iter(keys).zip(values).collect_list()
+        assert len(pairs) == 3
+        assert pairs[0] == (Key(id=1), Value(data="a"))
+        assert pairs[2] == (Key(id=3), Value(data="c"))
+
+    def test_iter_inspect_side_effects(self) -> None:
+        """Use inspect for logging/debugging in pipeline."""
+
+        class Order(Struct):
+            order_id: int
+            total: float
+
+        orders = [
+            Order(order_id=1, total=100.0),
+            Order(order_id=2, total=50.0),
+            Order(order_id=3, total=200.0),
+        ]
+
+        inspected: list[int] = []
+
+        result = (
+            Iter(orders)
+            .filter(lambda o: o.total > 75)
+            .inspect(lambda o: inspected.append(o.order_id))
+            .map(lambda o: o.total)
+            .collect_list()
+        )
+
+        assert result == [100.0, 200.0]
+        assert inspected == [1, 3]
+
+
+# =============================================================================
+# Struct.replace with Validation
+# =============================================================================
+
+
+class TestStructReplaceValidation:
+    """Test Struct.replace with validation and Result."""
+
+    def test_replace_creates_new_instance(self) -> None:
+        """Replace returns a new instance, original unchanged."""
+
+        class Config(Struct):
+            host: str
+            port: int
+            debug: bool = False
+
+        original = Config(host="localhost", port=8080)
+        updated = original.replace(port=9090, debug=True)
+
+        # Original unchanged
+        assert original.port == 8080
+        assert original.debug is False
+
+        # Updated has new values
+        assert updated.port == 9090
+        assert updated.debug is True
+        assert updated.host == "localhost"
+
+    def test_replace_validates_new_values(self) -> None:
+        """Replace validates the new field values."""
+
+        class PositiveInt(Struct, mut=True):
+            value: int
+
+            def model_post_init(self, _context: object, /) -> None:
+                if self.value < 0:
+                    msg = "value must be positive"
+                    raise ValueError(msg)
+
+        original = PositiveInt(value=10)
+
+        # Valid replacement
+        updated = original.replace(value=20)
+        assert updated.value == 20
+
+        # Invalid replacement raises
+        with pytest.raises(ValueError, match="value must be positive"):
+            original.replace(value=-5)
+
+    def test_try_from_with_replace_pattern(self) -> None:
+        """Combine try_from and replace for update patterns."""
+
+        class User(Struct, mut=True):
+            id: int
+            name: str
+            email: str
+
+        # Parse initial data
+        result = User.try_from({"id": 1, "name": "Alice", "email": "alice@example.com"})
+        assert isinstance(result, Ok)
+
+        # Update email
+        user = result.unwrap()
+        updated = user.replace(email="alice.new@example.com")
+        assert updated.email == "alice.new@example.com"
+
+
+# =============================================================================
+# OnceCell + Error Recovery
+# =============================================================================
+
+
+class TestOnceCellErrorRecovery:
+    """Test OnceCell with error handling patterns."""
+
+    def test_oncecell_take_and_reinit(self) -> None:
+        """Take value from OnceCell and reinitialize."""
+        cell: OnceCell[int] = OnceCell()
+
+        # Initial set
+        cell.set(42)
+        assert cell.get() == Some(42)
+
+        # Take the value
+        taken = cell.take()
+        assert taken == Some(42)
+        assert cell.get() == Nothing()
+
+        # Can set again after take
+        cell.set(100)
+        assert cell.get() == Some(100)
+
+    def test_oncecell_get_or_init_with_fallible_init(self) -> None:
+        """get_or_init with initialization that may fail."""
+        cell: OnceCell[int] = OnceCell()
+        call_count = 0
+
+        def init() -> int:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise ValueError("transient error")
+            return 42
+
+        # First call fails - exception propagates
+        with pytest.raises(ValueError, match="transient error"):
+            cell.get_or_init(init)
+
+        # Cell should still be uninitialized
+        assert cell.get() == Nothing()
+
+        # Second call succeeds
+        value = cell.get_or_init(init)
+        assert value == 42
+        assert call_count == 2
+
+    def test_oncecell_with_result_value(self) -> None:
+        """OnceCell storing Result values."""
+        cache: OnceCell[Ok[dict[str, int]] | Err[IOError]] = OnceCell()
+
+        # Cache a successful result
+        cache.set(Ok({"key": 42}))
+
+        # Retrieve and use
+        cached = cache.get()
+        assert isinstance(cached, Some)
+
+        match cached.unwrap():
+            case Ok(data):
+                assert data["key"] == 42
+            case Err():
+                pytest.fail("Expected Ok")
+
+
+# =============================================================================
+# Lazy + Iter Integration
+# =============================================================================
+
+
+class TestLazyIterIntegration:
+    """Test Lazy with Iter operations."""
+
+    def test_lazy_iter_deferred(self) -> None:
+        """Lazy Iter is not evaluated until consumed."""
+        evaluated = False
+
+        def create_iter() -> Iter[int]:
+            nonlocal evaluated
+            evaluated = True
+            return Iter([1, 2, 3])
+
+        lazy_iter = Lazy(create_iter)
+
+        assert not evaluated
+        assert not lazy_iter.is_computed()
+
+        # Accessing the iter triggers computation
+        it = lazy_iter.get()
+        assert evaluated
+        assert it.collect_list() == [1, 2, 3]
+
+    def test_lazy_expensive_computation_cached(self) -> None:
+        """Expensive Iter computation is cached."""
+        compute_count = 0
+
+        def expensive_computation() -> list[int]:
+            nonlocal compute_count
+            compute_count += 1
+            return Iter(range(1000)).map(lambda x: x * 2).filter(lambda x: x % 3 == 0).collect_list()
+
+        lazy_result = Lazy(expensive_computation)
+
+        # First access computes
+        result1 = lazy_result.get()
+        assert compute_count == 1
+
+        # Second access returns cached
+        result2 = lazy_result.get()
+        assert compute_count == 1
+        assert result1 == result2
+
+    def test_lazy_struct_collection(self) -> None:
+        """Lazy loading of a Struct collection."""
+
+        class Product(Struct, mut=True):
+            id: int
+            name: str
+            price: float
+
+        def load_products() -> list[Product]:
+            return [
+                Product(id=1, name="Widget", price=9.99),
+                Product(id=2, name="Gadget", price=19.99),
+                Product(id=3, name="Gizmo", price=29.99),
+            ]
+
+        products = Lazy(load_products)
+
+        # Filter and sort without recomputing
+        result = Iter(products.get()).filter(lambda p: p.price > 10).sorted_by(lambda p: p.price, reverse=True)
+
+        assert [p.name for p in result] == ["Gizmo", "Gadget"]
+
+
+# =============================================================================
+# Complex Pipeline Scenarios
+# =============================================================================
+
+
+class TestComplexPipelines:
+    """Test complex real-world pipeline scenarios."""
+
+    def test_etl_pipeline(self) -> None:
+        """Extract-Transform-Load pipeline with full error handling."""
+
+        class RawRecord(Struct, mut=True):
+            id: str
+            value: str
+            timestamp: str
+
+        class ProcessedRecord(Struct, mut=True):
+            id: int
+            value: float
+            timestamp: int
+
+        raw_data = [
+            {"id": "1", "value": "10.5", "timestamp": "1000"},
+            {"id": "bad", "value": "20.0", "timestamp": "1001"},  # Bad id
+            {"id": "3", "value": "invalid", "timestamp": "1002"},  # Bad value
+            {"id": "4", "value": "40.0", "timestamp": "1003"},
+        ]
+
+        def extract(data: dict[str, str]) -> Ok[RawRecord] | Err[Exception]:
+            return RawRecord.try_from(data)
+
+        def transform(raw: RawRecord) -> Ok[ProcessedRecord] | Err[Exception]:
+            return try_except(
+                lambda: ProcessedRecord(id=int(raw.id), value=float(raw.value), timestamp=int(raw.timestamp))
+            )
+
+        # Full pipeline
+        results = [extract(d).and_then(transform) for d in raw_data]
+
+        successes = [r.unwrap() for r in results if r.is_ok()]
+        failures = [r for r in results if r.is_err()]
+
+        assert len(successes) == 2
+        assert len(failures) == 2
+        assert successes[0].id == 1
+        assert successes[1].id == 4
+
+    def test_validation_pipeline_with_accumulation(self) -> None:
+        """Validate multiple fields, accumulating all errors."""
+
+        class ValidationError(Exception):
+            """Exception that holds multiple field-level errors."""
+
+            def __init__(self, errors: list[tuple[str, str]]) -> None:
+                self.errors = errors
+                super().__init__(f"Validation failed: {errors}")
+
+        def validate_name(name: str) -> list[tuple[str, str]]:
+            errors: list[tuple[str, str]] = []
+            if len(name) < 2:
+                errors.append(("name", "too short"))
+            if not name.isalpha():
+                errors.append(("name", "must be alphabetic"))
+            return errors
+
+        def validate_age(age: int) -> list[tuple[str, str]]:
+            errors: list[tuple[str, str]] = []
+            if age < 0:
+                errors.append(("age", "cannot be negative"))
+            if age > 150:
+                errors.append(("age", "unrealistic age"))
+            return errors
+
+        def validate_all(name: str, age: int) -> Ok[tuple[str, int]] | Err[ValidationError]:
+            errors = validate_name(name) + validate_age(age)
+            if errors:
+                return Err(ValidationError(errors))
+            return Ok((name, age))
+
+        # Valid input
+        result = validate_all("Alice", 30)
+        assert result == Ok(("Alice", 30))
+
+        # Multiple errors: "A1" triggers "must be alphabetic", -5 triggers "cannot be negative"
+        result = validate_all("A1", -5)
+        assert isinstance(result, Err)
+        assert len(result.error.errors) == 2
+
+        # Even more errors with shorter invalid name
+        result = validate_all("1", -5)
+        assert isinstance(result, Err)
+        assert len(result.error.errors) == 3  # too short, not alphabetic, negative
+
+    def test_state_machine_with_result(self) -> None:
+        """State machine transitions using Result."""
+
+        class State(Struct):
+            name: str
+            data: dict[str, object]
+
+        class InvalidTransitionError(Exception):
+            pass
+
+        def transition(state: State, action: str) -> Ok[State] | Err[InvalidTransitionError]:
+            match (state.name, action):
+                case ("idle", "start"):
+                    return Ok(State(name="running", data={"started_at": 0}))
+                case ("running", "pause"):
+                    return Ok(State(name="paused", data=state.data))
+                case ("paused", "resume"):
+                    return Ok(State(name="running", data=state.data))
+                case ("running", "stop") | ("paused", "stop"):
+                    return Ok(State(name="stopped", data=state.data))
+                case _:
+                    return Err(InvalidTransitionError(f"Cannot {action} from {state.name}"))
+
+        # Valid sequence
+        state = State(name="idle", data={})
+        state = transition(state, "start").unwrap()
+        state = transition(state, "pause").unwrap()
+        state = transition(state, "resume").unwrap()
+        state = transition(state, "stop").unwrap()
+        assert state.name == "stopped"
+
+        # Invalid transition
+        state = State(name="idle", data={})
+        result = transition(state, "pause")
+        assert isinstance(result, Err)
+        assert "Cannot pause from idle" in str(result.error)
