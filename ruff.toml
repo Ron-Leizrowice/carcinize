@@ -91,6 +91,7 @@ ignore = [
   "D202",     # Allow blank lines after function docstrings
   "D203",     # Do not insert an extra linebreak for class docstrings
   "D213",     # We want docstrings to start on the first line, not the second.
+  "D413",     # Don't require a blank line after returns in docstrings.
   "E501",     # Allow long lines (we use ruff formatter)
   "N815",     # Allow camelCase attributes (useful for creating pydantic models)
   "S101",     # Allow use of assert statements (unless you are actually using `-O` to optimize your code)
