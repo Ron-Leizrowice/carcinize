@@ -55,7 +55,7 @@ result = (
 )
 ```
 
-**Methods:** `is_ok()`, `is_err()`, `ok()`, `err()`, `unwrap()`, `unwrap_err()`, `expect()`, `expect_err()`, `unwrap_or()`, `unwrap_or_else()`, `map()`, `map_err()`, `map_or()`, `map_or_else()`, `and_then()`, `or_else()`
+**Methods:** `is_ok()`, `is_err()`, `ok()`, `err()`, `unwrap()`, `unwrap_err()`, `expect()`, `expect_err()`, `unwrap_or()`, `unwrap_or_else()`, `map()`, `map_err()`, `map_or()`, `map_or_else()`, `and_then()`, `or_else()`, `context()`, `note()`
 
 **Converting to Option:** The `ok()` and `err()` methods return `Option` types, matching Rust's API:
 
@@ -63,6 +63,50 @@ result = (
 - `Err(e).ok()` returns `Nothing()`, `Err(e).err()` returns `Some(e)`
 
 **Type variance:** Both `Ok[T]` and `Err[E]` are covariant in their type parameters, meaning `Ok[Subclass]` is a subtype of `Ok[Superclass]` and `Err[SubException]` is a subtype of `Err[SuperException]`. This is safe because both types are immutable, and matches Rust's `Result<T, E>` which is covariant in both type parameters.
+
+**Enhanced error context:** When you create an `Err`, it automatically captures where in your code it was created. When you later call `unwrap()`, the traceback includes this origin information, making debugging much easier:
+
+```python
+def fetch_user(id: int) -> Result[User, ValueError]:
+    if id < 0:
+        return Err(ValueError("invalid user id"))  # Origin captured here
+    return Ok(User(id))
+
+# When unwrap() is called, the traceback shows:
+# 1. Where unwrap() was called
+# 2. A note showing where the Err was originally created
+fetch_user(-1).unwrap()
+# ValueError: invalid user id
+# Error originated at:
+#   /path/to/file.py:3 in fetch_user
+#     return Err(ValueError("invalid user id"))
+```
+
+**Adding context:** Use `.context()` and `.note()` to add debugging information (similar to Rust's `anyhow`):
+
+```python
+result = (
+    fetch_user(user_id)
+    .context("while loading user profile")
+    .note(f"user_id={user_id}")
+)
+# If this fails, the traceback will include both the context and note
+
+# Works on both Ok and Err - Ok ignores them, Err adds them
+# So you can add context without checking the variant first
+```
+
+**Converting exceptions to Result:** Use `try_except` to convert exception-throwing code:
+
+```python
+from carcinize import try_except
+
+result = try_except(lambda: int("not a number"), ValueError)
+# Returns Err(ValueError(...)) instead of raising
+
+result = try_except(lambda: 42, ValueError)
+# Returns Ok(42)
+```
 
 ### Option
 
@@ -254,6 +298,26 @@ try:
     Err(ValueError("oops")).unwrap()
 except ValueError as e:
     print(e)  # "oops"
+```
+
+**Rich error context:** When `Err.unwrap()` raises, the exception includes notes showing where the error originated. If you caught an exception and wrapped it in `Err`, the original raise location is also shown:
+
+```python
+def risky_operation() -> Result[int, ValueError]:
+    try:
+        return Ok(some_external_api())
+    except ValueError as e:
+        return Err(e)  # Original traceback preserved
+
+# Later...
+result = risky_operation().context("while syncing data")
+result.unwrap()
+
+# The traceback will show:
+# 1. Where unwrap() was called
+# 2. "Context: while syncing data"
+# 3. "Error originated at: ..." (where Err() was created)
+# 4. "Exception was originally raised at: ..." (where ValueError was raised)
 ```
 
 ## Type Checking
