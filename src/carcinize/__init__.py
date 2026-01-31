@@ -4,7 +4,7 @@ This package provides Rust-inspired data types for Python:
 
 - Result: A type representing either success (Ok) or failure (Err)
 - Option: A type representing an optional value (Some or Nothing)
-- Struct/FrozenStruct: Pydantic-based structs with Rust-like semantics
+- Struct: Pydantic-based structs with Rust-like semantics
 - Iter: Fluent iterator with chainable combinators
 - Lazy/OnceCell: Thread-safe lazy initialization primitives
 """

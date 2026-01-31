@@ -726,3 +726,335 @@ class TestMutabilityAPI:
 
         assert s1 == s2
         assert hash(s1) == hash(s2)
+
+
+# =============================================================================
+# is_mut() Classmethod Tests
+# =============================================================================
+
+
+class TestIsMutClassmethod:
+    """Test the is_mut() classmethod for runtime mutability checks."""
+
+    def test_is_mut_on_immutable_struct(self) -> None:
+        """is_mut() should return False for immutable structs."""
+        assert SimpleImmutableStruct.is_mut() is False
+
+    def test_is_mut_on_mutable_struct(self) -> None:
+        """is_mut() should return True for mutable structs."""
+        assert SimpleMutableStruct.is_mut() is True
+
+    def test_is_mut_on_explicit_mut_false(self) -> None:
+        """is_mut() should return False for explicit mut=False."""
+
+        class ExplicitImmutable(Struct, mut=False):
+            value: int
+
+        assert ExplicitImmutable.is_mut() is False
+
+    def test_is_mut_via_instance(self) -> None:
+        """is_mut() should be callable via instance as well."""
+        mutable = SimpleMutableStruct(name="test", age=1)
+        immutable = SimpleImmutableStruct(name="test", age=1)
+
+        assert mutable.is_mut() is True
+        assert immutable.is_mut() is False
+
+    def test_is_mut_matches_mutable_flag(self) -> None:
+        """is_mut() should always match __mutable__ class variable."""
+
+        class TestMutable(Struct, mut=True):
+            x: int
+
+        class TestImmutable(Struct):
+            x: int
+
+        assert TestMutable.is_mut() == TestMutable.__mutable__
+        assert TestImmutable.is_mut() == TestImmutable.__mutable__
+
+
+# =============================================================================
+# isinstance() Behavior Tests
+# =============================================================================
+
+
+class TestIsInstanceBehavior:
+    """Test that isinstance() works correctly with the metaclass."""
+
+    def test_mutable_struct_is_instance_of_struct(self) -> None:
+        """Mutable struct instances should be isinstance of Struct."""
+        s = SimpleMutableStruct(name="test", age=1)
+        assert isinstance(s, Struct)
+
+    def test_immutable_struct_is_instance_of_struct(self) -> None:
+        """Immutable struct instances should be isinstance of Struct."""
+        s = SimpleImmutableStruct(name="test", age=1)
+        assert isinstance(s, Struct)
+
+    def test_subclass_check_for_mutable(self) -> None:
+        """Mutable struct class should be subclass of Struct."""
+        assert issubclass(SimpleMutableStruct, Struct)
+
+    def test_subclass_check_for_immutable(self) -> None:
+        """Immutable struct class should be subclass of Struct."""
+        assert issubclass(SimpleImmutableStruct, Struct)
+
+    def test_isinstance_with_nested_struct(self) -> None:
+        """Nested struct should also be isinstance of Struct."""
+        inner = SimpleImmutableStruct(name="inner", age=1)
+        outer = NestedImmutableStruct(inner=inner, label="outer")
+
+        assert isinstance(outer, Struct)
+        assert isinstance(outer.inner, Struct)
+
+
+# =============================================================================
+# Base Struct Class Immutability Tests
+# =============================================================================
+
+
+class TestBaseStructImmutability:
+    """Test that the base Struct class itself is properly frozen.
+
+    This verifies the fix where the metaclass was skipping _frozen_setattr
+    assignment for the base Struct class.
+    """
+
+    def test_base_struct_has_frozen_config(self) -> None:
+        """Base Struct class should have frozen=True in model_config."""
+        assert Struct.model_config.get("frozen") is True
+
+    def test_base_struct_is_not_mutable(self) -> None:
+        """Base Struct class should have __mutable__ = False."""
+        assert Struct.__mutable__ is False
+
+    def test_base_struct_is_mut_returns_false(self) -> None:
+        """Base Struct class is_mut() should return False."""
+        assert Struct.is_mut() is False
+
+
+# =============================================================================
+# Inheritance Hierarchy Tests
+# =============================================================================
+
+
+class TestInheritanceHierarchy:
+    """Test that the inheritance hierarchy is properly maintained."""
+
+    def test_user_class_inherits_from_struct(self) -> None:
+        """User-defined classes should inherit from Struct."""
+        assert Struct in SimpleImmutableStruct.__mro__
+        assert Struct in SimpleMutableStruct.__mro__
+
+    def test_mro_includes_struct_base(self) -> None:
+        """Method Resolution Order should include Struct."""
+
+        class TestStruct(Struct):
+            x: int
+
+        mro_names = [cls.__name__ for cls in TestStruct.__mro__]
+        assert "Struct" in mro_names
+        assert "_StructBase" in mro_names
+
+    def test_multi_level_inheritance_immutable(self) -> None:
+        """Multi-level inheritance should preserve immutability."""
+
+        class Base(Struct):
+            x: int
+
+        class Derived(Base):
+            y: int
+
+        d = Derived(x=1, y=2)
+        assert d.__mutable__ is False
+        assert d.is_mut() is False
+
+        with pytest.raises(ValidationError):
+            d.x = 10
+
+    def test_multi_level_inheritance_mutable(self) -> None:
+        """Multi-level inheritance requires explicit mut=True on each level.
+
+        Mutability does NOT inherit - each derived class must explicitly opt in.
+        This is the safe default (immutability by default, like Rust).
+        """
+
+        class MutableBase(Struct, mut=True):
+            x: int
+
+        # Derived without mut=True becomes immutable (the default)
+        class ImmutableDerived(MutableBase):
+            y: int
+
+        d = ImmutableDerived(x=1, y=2)
+        assert d.__mutable__ is False  # Immutable by default!
+        assert d.model_config.get("frozen") is True
+
+        with pytest.raises(ValidationError):
+            d.x = 10
+
+        # Must explicitly specify mut=True for mutable derived class
+        class ExplicitMutableDerived(MutableBase, mut=True):
+            y: int
+
+        d2 = ExplicitMutableDerived(x=1, y=2)
+        assert d2.__mutable__ is True
+        assert d2.model_config.get("frozen") is False
+
+        d2.x = 10
+        assert d2.x == 10
+
+    def test_mixed_inheritance_immutable_from_mutable(self) -> None:
+        """Derived immutable struct from mutable base should be immutable."""
+
+        class MutableParent(Struct, mut=True):
+            x: int
+
+        class ImmutableChild(MutableParent, mut=False):
+            y: int
+
+        child = ImmutableChild(x=1, y=2)
+        assert child.__mutable__ is False
+        assert child.is_mut() is False
+        assert child.model_config.get("frozen") is True
+
+        with pytest.raises(ValidationError):
+            child.x = 10
+
+    def test_mixed_inheritance_mutable_from_immutable(self) -> None:
+        """Derived mutable struct from immutable base should be mutable."""
+
+        class ImmutableParent(Struct):
+            x: int
+
+        class MutableChild(ImmutableParent, mut=True):
+            y: int
+
+        child = MutableChild(x=1, y=2)
+        assert child.__mutable__ is True
+        assert child.is_mut() is True
+        assert child.model_config.get("frozen") is False
+
+        child.x = 10
+        assert child.x == 10
+
+
+# =============================================================================
+# Edge Cases and Contract Tests
+# =============================================================================
+
+
+class TestEdgeCasesAndContracts:
+    """Test edge cases and contractual behavior."""
+
+    def test_empty_struct(self) -> None:
+        """Empty struct (no fields) should work."""
+
+        class EmptyStruct(Struct):
+            pass
+
+        s = EmptyStruct()
+        assert s.__mutable__ is False
+        assert s.is_mut() is False
+        assert s.as_dict() == {}
+
+    def test_empty_mutable_struct(self) -> None:
+        """Empty mutable struct should work."""
+
+        class EmptyMutableStruct(Struct, mut=True):
+            pass
+
+        s = EmptyMutableStruct()
+        assert s.__mutable__ is True
+        assert s.is_mut() is True
+
+    def test_struct_with_defaults(self) -> None:
+        """Struct with default values should work correctly."""
+
+        class WithDefaults(Struct):
+            name: str = "default"
+            count: int = 0
+
+        s = WithDefaults()
+        assert s.name == "default"
+        assert s.count == 0
+        assert s.__mutable__ is False
+
+    def test_struct_with_optional_fields(self) -> None:
+        """Struct with optional fields should work correctly."""
+
+        class WithOptional(Struct):
+            required: str
+            optional: str | None = None
+
+        s = WithOptional(required="test")
+        assert s.required == "test"
+        assert s.optional is None
+        assert s.__mutable__ is False
+
+    def test_replace_preserves_mutability(self) -> None:
+        """replace() should return instance with same mutability."""
+        mutable = SimpleMutableStruct(name="test", age=1)
+        replaced_mutable = mutable.replace(age=2)
+        assert replaced_mutable.__mutable__ is True
+        assert replaced_mutable.is_mut() is True
+
+        immutable = SimpleImmutableStruct(name="test", age=1)
+        replaced_immutable = immutable.replace(age=2)
+        assert replaced_immutable.__mutable__ is False
+        assert replaced_immutable.is_mut() is False
+
+    def test_clone_preserves_mutability(self) -> None:
+        """clone() should return instance with same mutability."""
+        mutable = SimpleMutableStruct(name="test", age=1)
+        cloned_mutable = mutable.clone()
+        assert cloned_mutable.__mutable__ is True
+
+        immutable = SimpleImmutableStruct(name="test", age=1)
+        cloned_immutable = immutable.clone()
+        assert cloned_immutable.__mutable__ is False
+
+    def test_try_from_preserves_mutability(self) -> None:
+        """try_from() should return instance with correct mutability."""
+        mutable_result = SimpleMutableStruct.try_from({"name": "test", "age": 1})
+        assert mutable_result.is_ok()
+        assert mutable_result.unwrap().__mutable__ is True
+
+        immutable_result = SimpleImmutableStruct.try_from({"name": "test", "age": 1})
+        assert immutable_result.is_ok()
+        assert immutable_result.unwrap().__mutable__ is False
+
+    def test_match_args_on_derived_class(self) -> None:
+        """__match_args__ should be set correctly on derived classes."""
+
+        class Parent(Struct):
+            x: int
+
+        class Child(Parent):
+            y: str
+
+        assert Child.__match_args__ == ("x", "y")
+
+        child = Child(x=1, y="test")
+        match child:
+            case Child(x, y):
+                assert x == 1
+                assert y == "test"
+            case _:
+                pytest.fail("Pattern should have matched")
+
+    def test_multiple_inheritance_not_supported_with_other_pydantic(self) -> None:
+        """Document that multiple inheritance with other BaseModel subclasses may be complex."""
+        # This is more of a documentation test - complex multiple inheritance
+        # scenarios should be tested individually if needed
+
+        class OtherModel(BaseModel):
+            z: int
+
+        # This should work but the config merging behavior depends on Pydantic
+        class Combined(Struct, OtherModel):
+            x: int
+
+        c = Combined(x=1, z=2)
+        assert c.x == 1
+        assert c.z == 2
