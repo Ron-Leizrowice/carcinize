@@ -22,9 +22,9 @@ Install with uv:
 uv add carcinize
 ```
 
-No I won't add examples for `pip`, `poetry`, or god forbid `conda`. It's 2026, grow up and use `uv`.
+No I won't add examples for `pip`, `poetry`, or **dry-heave**... `conda`.
 
-Requires Python 3.12+.
+It's 2026, grow up and use `uv`.
 
 ## Features
 
@@ -142,10 +142,10 @@ User.try_from('{"name": "Charlie", "age": 35}')
 - Strict type validation (no coercion)
 - Pattern matching support via `__match_args__`
 - Functional updates via `replace()`
-- `__mutable__` class variable for runtime checks
+- `is_mut()` classmethod and `__mutable__` class variable for runtime mutability checks
 - Immutable structs are hashable (can be used in sets/dicts)
 
-**Methods:** `try_from()`, `replace()`, `clone()`, `as_dict()`, `as_json()`
+**Methods:** `try_from()`, `replace()`, `clone()`, `as_dict()`, `as_json()`, `is_mut()`
 
 **Rust-like immutability:** Like Rust, immutability applies to the *binding*, not the type. An immutable struct can contain fields of any type - you just can't mutate them through the immutable binding:
 
@@ -258,7 +258,9 @@ except ValueError as e:
 
 ## Type Checking
 
-This library is fully typed and works with type checkers like `mypy`, `pyright`, and `ty`. The `Struct` class uses `@dataclass_transform` to ensure proper type inference for fields.
+This library is fully typed using `ty`. If you are already using `carcinize` in your project, you should **absolutely** be using `ty` as your static type checker, and maybe even as your LSP, for the closest possible Rust-like experience.
+
+The `Struct` class uses `@dataclass_transform` to ensure proper type inference for fields.
 
 ## License
 
