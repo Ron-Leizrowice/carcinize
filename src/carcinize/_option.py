@@ -120,7 +120,7 @@ class Some(Generic[T_co]):  # noqa: UP046 - Generic required for covariance
     def zip[U](self, other: Option[U]) -> Option[tuple[T_co, U]]:
         """Combine with another Option into a tuple if both are Some."""
         if isinstance(other, Some):
-            # cast needed due to ty limitation with generic dataclass inference
+            # cast needed: ty can't infer generic dataclass type from tuple constructor
             return cast(Option[tuple[T_co, U]], Some((self.value, other.value)))
         return Nothing()
 

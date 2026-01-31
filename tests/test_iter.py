@@ -88,6 +88,75 @@ class TestIterSlicing:
         result = Iter([1, 2, 3, 4, 5, 6]).step_by(2).collect_list()
         assert result == [1, 3, 5]
 
+    def test_batched_exact_division(self) -> None:
+        """batched() should group elements into equal-sized batches."""
+        result = Iter([1, 2, 3, 4, 5, 6]).batched(2).collect_list()
+        assert result == [(1, 2), (3, 4), (5, 6)]
+
+    def test_batched_with_remainder(self) -> None:
+        """batched() should handle incomplete final batch."""
+        result = Iter([1, 2, 3, 4, 5]).batched(2).collect_list()
+        assert result == [(1, 2), (3, 4), (5,)]
+
+    def test_batched_single_element_batches(self) -> None:
+        """batched(1) should create single-element tuples."""
+        result = Iter([1, 2, 3]).batched(1).collect_list()
+        assert result == [(1,), (2,), (3,)]
+
+    def test_batched_larger_than_input(self) -> None:
+        """batched() with n > len should return single batch."""
+        result = Iter([1, 2, 3]).batched(10).collect_list()
+        assert result == [(1, 2, 3)]
+
+    def test_batched_empty_iterator(self) -> None:
+        """batched() on empty iterator should yield nothing."""
+        result = Iter([]).batched(3).collect_list()
+        assert result == []
+
+    def test_batched_invalid_size_raises(self) -> None:
+        """batched() with n < 1 should raise ValueError."""
+        import pytest
+
+        with pytest.raises(ValueError, match="batch size must be at least 1"):
+            Iter([1, 2, 3]).batched(0).collect_list()
+
+    def test_window_sliding(self) -> None:
+        """window() should create sliding windows."""
+        result = Iter([1, 2, 3, 4]).window(2).collect_list()
+        assert result == [(1, 2), (2, 3), (3, 4)]
+
+    def test_window_size_three(self) -> None:
+        """window() with size 3 should create overlapping triplets."""
+        result = Iter([1, 2, 3, 4, 5]).window(3).collect_list()
+        assert result == [(1, 2, 3), (2, 3, 4), (3, 4, 5)]
+
+    def test_window_size_one(self) -> None:
+        """window(1) should wrap each element in a tuple."""
+        result = Iter([1, 2, 3]).window(1).collect_list()
+        assert result == [(1,), (2,), (3,)]
+
+    def test_window_equal_to_length(self) -> None:
+        """window() with n == len should return single window."""
+        result = Iter([1, 2, 3]).window(3).collect_list()
+        assert result == [(1, 2, 3)]
+
+    def test_window_larger_than_input(self) -> None:
+        """window() with n > len should yield nothing."""
+        result = Iter([1, 2]).window(5).collect_list()
+        assert result == []
+
+    def test_window_empty_iterator(self) -> None:
+        """window() on empty iterator should yield nothing."""
+        result = Iter([]).window(2).collect_list()
+        assert result == []
+
+    def test_window_invalid_size_raises(self) -> None:
+        """window() with n < 1 should raise ValueError."""
+        import pytest
+
+        with pytest.raises(ValueError, match="window size must be at least 1"):
+            Iter([1, 2, 3]).window(0).collect_list()
+
 
 # =============================================================================
 # Combining Tests
@@ -319,6 +388,62 @@ class TestIterPartitioning:
         """group_by() should group by key."""
         result = Iter([1, 2, 3, 4, 5, 6]).group_by(lambda x: x % 3)
         assert result == {1: [1, 4], 2: [2, 5], 0: [3, 6]}
+
+
+# =============================================================================
+# Sorting Tests
+# =============================================================================
+
+
+class TestIterSorting:
+    """Test Iter sorting methods."""
+
+    def test_sorted_returns_sorted_list(self) -> None:
+        """sorted() should return a sorted list."""
+        result = Iter([3, 1, 4, 1, 5, 9, 2, 6]).sorted()
+        assert result == [1, 1, 2, 3, 4, 5, 6, 9]
+
+    def test_sorted_reverse(self) -> None:
+        """sorted() with reverse=True should return descending order."""
+        result = Iter([3, 1, 4, 1, 5]).sorted(reverse=True)
+        assert result == [5, 4, 3, 1, 1]
+
+    def test_sorted_empty(self) -> None:
+        """sorted() on empty iterator should return empty list."""
+        result = Iter([]).sorted()
+        assert result == []
+
+    def test_sorted_strings(self) -> None:
+        """sorted() should work with strings (lexicographic order)."""
+        result = Iter(["banana", "apple", "cherry"]).sorted()
+        assert result == ["apple", "banana", "cherry"]
+
+    def test_sorted_by_key(self) -> None:
+        """sorted_by() should sort by key function."""
+        result = Iter(["bb", "a", "ccc"]).sorted_by(len)
+        assert result == ["a", "bb", "ccc"]
+
+    def test_sorted_by_reverse(self) -> None:
+        """sorted_by() with reverse=True should sort descending by key."""
+        result = Iter(["bb", "a", "ccc"]).sorted_by(len, reverse=True)
+        assert result == ["ccc", "bb", "a"]
+
+    def test_sorted_by_with_complex_key(self) -> None:
+        """sorted_by() should work with complex key functions."""
+        items = [{"name": "bob", "age": 30}, {"name": "alice", "age": 25}, {"name": "charlie", "age": 35}]
+        result = Iter(items).sorted_by(lambda x: x["age"])
+        assert result[0]["name"] == "alice"
+        assert result[1]["name"] == "bob"
+        assert result[2]["name"] == "charlie"
+
+    def test_sorted_preserves_equal_elements_stability(self) -> None:
+        """sorted() should be stable (preserve relative order of equal elements)."""
+        # Python's sort is stable, so equal elements keep their relative order
+        items = [(1, "a"), (2, "b"), (1, "c"), (2, "d")]
+        result = Iter(items).sorted_by(lambda x: x[0])
+        # Elements with key 1 should appear in original order: (1, "a"), (1, "c")
+        # Elements with key 2 should appear in original order: (2, "b"), (2, "d")
+        assert result == [(1, "a"), (1, "c"), (2, "b"), (2, "d")]
 
 
 # =============================================================================
