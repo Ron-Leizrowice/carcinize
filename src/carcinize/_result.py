@@ -451,14 +451,24 @@ class Err(Generic[E_co]):  # noqa: UP046 - Generic required for covariance
 # =============================================================================
 
 
-def try_except[T, E: Exception](
+def try_except[T](
     f: Callable[[], T],
-    *exception_types: type[E],
-) -> Result[T, E]:
+    *exception_types: type[Exception],
+) -> Result[T, Exception]:
     """Execute a function and capture any exceptions as an Err.
 
     This is a convenience function for converting exception-throwing code
     into Result-returning code.
+
+    Note:
+        The return type is `Result[T, Exception]` because Python's type system
+        cannot express "the union of all types in *exception_types". Use pattern
+        matching on the error to narrow to specific exception types:
+
+            match try_except(risky_op, ValueError, TypeError):
+                case Ok(value): ...
+                case Err(ValueError() as e): ...
+                case Err(TypeError() as e): ...
 
     Example:
         result = try_except(lambda: int("not a number"), ValueError)
@@ -479,4 +489,8 @@ def try_except[T, E: Exception](
     try:
         return Ok(f())
     except catch as e:
-        return Err(e)  # ty: ignore[invalid-argument-type]
+        # Type narrowing: catch tuple only contains Exception subclasses
+        # The type checker sees BaseException, but we know it's Exception
+        if not isinstance(e, Exception):
+            raise  # Impossible branch, satisfies type checker
+        return Err(e)

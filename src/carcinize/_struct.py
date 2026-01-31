@@ -26,6 +26,7 @@ from typing import ClassVar, NoReturn, Self, dataclass_transform
 
 from pydantic import BaseModel, ConfigDict, JsonValue, ValidationError
 from pydantic._internal._model_construction import ModelMetaclass
+from pydantic_core import PydanticCustomError
 
 from carcinize._base import RustType
 from carcinize._result import Err, Ok, Result
@@ -43,13 +44,22 @@ _BASE_CONFIG: dict[str, object] = {
 }
 
 
-def _frozen_setattr(self: BaseModel, name: str, value: object) -> NoReturn:  # ty: ignore[invalid-return-type]
+def _frozen_setattr(self: BaseModel, name: str, value: object) -> NoReturn:
     """Prevent attribute assignment on frozen struct.
 
-    The NoReturn annotation tells type checkers that assignment always fails.
-    We call BaseModel.__setattr__ which will raise ValidationError for frozen models.
+    Explicitly raises ValidationError with the same format as Pydantic's frozen instance error.
+    The NoReturn annotation correctly indicates this function always raises.
     """
-    BaseModel.__setattr__(self, name, value)
+    raise ValidationError.from_exception_data(
+        title=self.__class__.__name__,
+        line_errors=[
+            {
+                "type": PydanticCustomError("frozen_instance", "Mutation of immutable struct"),
+                "loc": (name,),
+                "input": value,
+            }
+        ],
+    )
 
 
 # =============================================================================
@@ -85,7 +95,11 @@ class _StructMeta(ModelMetaclass):
             namespace["__mutable__"] = mut
             namespace["model_config"] = ConfigDict(**_BASE_CONFIG, frozen=not mut)
 
-            if not mut:
+            if mut:
+                # Mutable structs use standard Pydantic setattr (allows assignment)
+                namespace["__setattr__"] = BaseModel.__setattr__
+            else:
+                # Immutable structs use our explicit-raise setattr
                 namespace["__setattr__"] = _frozen_setattr
 
         cls = super().__new__(mcs, name, bases, namespace, **kwargs)  # ty:ignore[invalid-argument-type]

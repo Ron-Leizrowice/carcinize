@@ -3,7 +3,7 @@
 Provides chainable methods for transforming and consuming iterables:
 
 - Transformations: `map`, `filter`, `filter_map`, `flat_map`, `flatten`
-- Slicing: `take`, `skip`, `take_while`, `skip_while`, `step_by`
+- Slicing: `take`, `skip`, `take_while`, `skip_while`, `step_by`, `batched`, `window`
 - Combining: `chain`, `zip`, `enumerate`
 - Folding: `fold`, `reduce`, `sum`, `product`
 - Searching: `find`, `find_map`, `position`, `any`, `all`, `count`
@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import itertools
 from collections.abc import Callable, Iterable, Iterator
-from typing import cast
 
 from carcinize._base import RustType
 from carcinize._option import Nothing, Option, Some
@@ -127,6 +126,59 @@ class Iter[T](RustType):
 
         return Iter(gen())
 
+    def batched(self, n: int) -> Iter[tuple[T, ...]]:
+        """Group elements into batches of size n.
+
+        The last batch may have fewer than n elements if there aren't enough
+        remaining elements.
+
+        Example:
+            Iter([1, 2, 3, 4, 5]).batched(2).collect_list()
+            # [(1, 2), (3, 4), (5,)]
+
+        Args:
+            n: The batch size. Must be at least 1.
+
+        Returns:
+            An Iter of tuples, each containing up to n elements.
+        """
+        if n < 1:
+            raise ValueError("batch size must be at least 1")
+
+        return Iter[tuple[T, ...]](itertools.batched(self._iter, n, strict=False))
+
+    def window(self, n: int) -> Iter[tuple[T, ...]]:
+        """Create sliding windows of size n over the elements.
+
+        Each window is a tuple containing n consecutive elements.
+        If there are fewer than n elements, yields nothing.
+
+        Example:
+            Iter([1, 2, 3, 4]).window(2).collect_list()
+            # [(1, 2), (2, 3), (3, 4)]
+
+            Iter([1, 2, 3, 4]).window(3).collect_list()
+            # [(1, 2, 3), (2, 3, 4)]
+
+        Args:
+            n: The window size. Must be at least 1.
+
+        Returns:
+            An Iter of tuples, each containing exactly n consecutive elements.
+        """
+        if n < 1:
+            raise ValueError("window size must be at least 1")
+
+        def gen() -> Iterator[tuple[T, ...]]:
+            buf: list[T] = []
+            for x in self._iter:
+                buf.append(x)
+                if len(buf) == n:
+                    yield tuple(buf)
+                    buf.pop(0)
+
+        return Iter[tuple[T, ...]](gen())
+
     # =========================================================================
     # Combining
     # =========================================================================
@@ -137,15 +189,15 @@ class Iter[T](RustType):
 
     def zip[U](self, other: Iterable[U]) -> Iter[tuple[T, U]]:
         """Zip with another iterable into pairs."""
-        return cast(Iter[tuple[T, U]], Iter(zip(self._iter, other, strict=False)))
+        return Iter[tuple[T, U]](zip(self._iter, other, strict=False))
 
     def zip_longest[U, D](self, other: Iterable[U], *, fillvalue: D) -> Iter[tuple[T | D, U | D]]:
         """Zip with another iterable, filling missing values."""
-        return cast(Iter[tuple[T | D, U | D]], Iter(itertools.zip_longest(self._iter, other, fillvalue=fillvalue)))
+        return Iter[tuple[T | D, U | D]](itertools.zip_longest(self._iter, other, fillvalue=fillvalue))
 
     def enumerate(self, start: int = 0) -> Iter[tuple[int, T]]:
         """Pair each element with its index."""
-        return cast(Iter[tuple[int, T]], Iter(enumerate(self._iter, start)))
+        return Iter[tuple[int, T]](enumerate(self._iter, start))
 
     def interleave(self, other: Iterable[T]) -> Iter[T]:
         """Interleave elements from both iterables."""
@@ -223,15 +275,14 @@ class Iter[T](RustType):
         items = self.collect_list()
         if not items:
             return Nothing()
-        # Use key function to satisfy type checker; identity preserves ordering
-        return Some(min(items, key=lambda x: cast(object, x)))  # type: ignore[type-var]
+        return Some(min(items))
 
     def max(self) -> Option[T]:
         """Find the maximum element. Requires elements to be comparable."""
         items = self.collect_list()
         if not items:
             return Nothing()
-        return Some(max(items, key=lambda x: cast(object, x)))  # type: ignore[type-var]
+        return Some(max(items))
 
     def collect_list(self) -> list[T]:
         """Collect all elements into a list."""
@@ -243,7 +294,7 @@ class Iter[T](RustType):
 
     def collect_dict[K, V](self: Iter[tuple[K, V]]) -> dict[K, V]:
         """Collect key-value pairs into a dict."""
-        return dict(self._iter)  # type: ignore[arg-type]
+        return dict(self._iter)
 
     def collect_string(self: Iter[str], sep: str = "") -> str:
         """Join string elements with a separator."""
@@ -297,15 +348,13 @@ class Iter[T](RustType):
 
     def sorted(self, *, reverse: bool = False) -> list[T]:
         """Collect and sort elements. Requires elements to be comparable."""
-        items = self.collect_list()
-        items.sort(key=lambda x: cast(object, x), reverse=reverse)  # type: ignore[misc]
-        return items
+        # T has no comparability bound; runtime fails if elements aren't comparable
+        return sorted(self._iter, reverse=reverse)  # ty: ignore[invalid-argument-type]
 
     def sorted_by[K](self, key: Callable[[T], K], *, reverse: bool = False) -> list[T]:
         """Collect and sort elements by a key function."""
-        items = self.collect_list()
-        items.sort(key=lambda x: cast(object, key(x)), reverse=reverse)  # type: ignore[misc]
-        return items
+        # K has no comparability bound; runtime fails if key doesn't return comparable values
+        return sorted(self._iter, key=key, reverse=reverse)  # ty: ignore[no-matching-overload]
 
     # =========================================================================
     # Deduplication
