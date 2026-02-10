@@ -864,7 +864,7 @@ class TestOptionResultChainingEdgeCases:
                 super().__init__(f"High level error: {cause}")
 
         err: Ok[int] | Err[LowLevelError] = Err(LowLevelError("disk full"))
-        transformed = err.map_err(lambda e: HighLevelError(e))
+        transformed = err.map_err(HighLevelError)
 
         assert isinstance(transformed, Err)
         assert isinstance(transformed.error, HighLevelError)
