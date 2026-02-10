@@ -44,7 +44,6 @@ jobs:
 
       - name: Type checking (Ty)
         run: uv run ty check .
-        continue-on-error: true
 
       - name: Unused dependencies (Deptry)
         run: uv run deptry src/
