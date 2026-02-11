@@ -82,7 +82,7 @@ class TestOkTransformation:
     def test_map_err_returns_self(self) -> None:
         """map_err() should return self unchanged for Ok."""
         ok = Ok(42)
-        result = ok.map_err(lambda e: str(e))
+        result = ok.map_err(str)
         assert result is ok
 
     def test_map_or_applies_function(self) -> None:

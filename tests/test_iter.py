@@ -45,7 +45,7 @@ class TestIterTransformations:
     def test_inspect_sees_elements(self) -> None:
         """inspect() should call function on each element."""
         seen: list[int] = []
-        result = Iter([1, 2, 3]).inspect(lambda x: seen.append(x)).collect_list()
+        result = Iter([1, 2, 3]).inspect(seen.append).collect_list()
         assert result == [1, 2, 3]
         assert seen == [1, 2, 3]
 

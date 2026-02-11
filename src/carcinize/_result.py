@@ -485,7 +485,7 @@ def try_except[T](
     Returns:
         Ok(result) if the function succeeds, Err(exception) if it raises.
     """
-    catch = exception_types if exception_types else (Exception,)
+    catch = exception_types or (Exception,)
     try:
         return Ok(f())
     except catch as e:
