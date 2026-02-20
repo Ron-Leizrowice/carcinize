@@ -349,7 +349,7 @@ class Iter[T](RustType):
     def sorted(self, *, reverse: bool = False) -> list[T]:
         """Collect and sort elements. Requires elements to be comparable."""
         # T has no comparability bound; runtime fails if elements aren't comparable
-        return sorted(self._iter, reverse=reverse)  # ty: ignore[invalid-argument-type]
+        return sorted(self._iter, reverse=reverse)
 
     def sorted_by[K](self, key: Callable[[T], K], *, reverse: bool = False) -> list[T]:
         """Collect and sort elements by a key function."""
