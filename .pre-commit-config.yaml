@@ -1,93 +1,89 @@
-fail_fast: false
+# Priority groups (lower runs first, hooks within a group run in parallel):
+#   0 - Formatting & Validation
+#   1 - Dependency Analysis
+#   2 - Python Formatting
+#   3 - Linting
+#   4 - Static Type checking
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
       - id: check-merge-conflict
-        priority: 0
+      - id: check-toml
+      - id: check-yaml
+      - id: trailing-whitespace
+      - id: check-ast
+      - id: check-case-conflict
+      - id: end-of-file-fixer
+      - id: detect-private-key
+      - id: check-added-large-files
 
   - repo: https://github.com/crate-ci/typos
-    rev: v1.42.1
+    rev: v1.43.5
     hooks:
       - id: typos
         priority: 0
 
   - repo: https://github.com/tox-dev/pyproject-fmt
-    rev: v2.11.1
+    rev: v2.16.1
     hooks:
       - id: pyproject-fmt
         priority: 0
 
-  - repo: https://github.com/astral-sh/uv-pre-commit
-    rev: 0.9.26
+  - repo: https://github.com/rvben/rumdl-pre-commit
+    rev: v0.1.23
     hooks:
-      - id: uv-lock
-      - id: uv-sync
+      - id: rumdl-fmt
         priority: 0
 
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.14.14
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.10.4
     hooks:
-      - id: ruff-format
+      - id: uv-lock
         priority: 0
-      - id: ruff
-        args: [--fix, --exit-non-zero-on-fix]
-        types_or: [python, pyi]
-        require_serial: true
-        priority: 1
 
   - repo: https://github.com/fpgmaas/deptry.git
     rev: 0.24.0
     hooks:
       - id: deptry
-        args: ["--ignore", "DEP001"]
-        priority: 0
+        priority: 1
 
-
-  - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.47.0
+  - repo: https://github.com/pysentry/pysentry-pre-commit
+    rev: v0.4.2
     hooks:
-      - id: markdownlint-fix
-        args: [--disable, MD013, --]
-        priority: 0
+      - id: pysentry
+        priority: 1
 
   - repo: local
     hooks:
+      - id: ruff-format
+        name: Ruff format
+        entry: uv run --frozen --no-sync ruff format
+        language: system
+        types_or: [python, pyi]
+        priority: 2
+
+      - id: ruff-check
+        name: Ruff check
+        entry: uv run --frozen --no-sync ruff check --fix --exit-non-zero-on-fix
+        language: system
+        types_or: [python, pyi]
+        priority: 3
+
       - id: ty
-        name: ty check
-        entry: ty check .
+        name: Ty
+        entry: uv run --frozen --no-sync ty check
         language: system
         pass_filenames: false
         types_or: [python, pyi]
-        priority: 1
+        priority: 4
 
-      - id: sync-codestyle
-        name: Sync STYLEGUIDE.md to agent rule files
+      - id: pyrefly-check
+        name: Pyrefly (informational)
+        entry: bash -c 'uv run --frozen --no-sync pyrefly check --output-format omit-errors || true'
         language: system
-        entry: |
-          bash -c '
-            SRC="STYLEGUIDE.md"
-            CURSOR_DST=".cursor/rules/python.mdc"
-
-            # Read source body
-            SRC_BODY=$(cat "$SRC")
-
-            # Write Cursor file with frontmatter
-            {
-              echo "---"
-              echo "globs: \"*.py\""
-              echo "alwaysApply: false"
-              echo "---"
-              echo "$SRC_BODY"
-            } > "$CURSOR_DST"
-
-            # Auto-stage if changed
-            if ! git diff --quiet "$CURSOR_DST" 2>/dev/null; then
-              git add "$CURSOR_DST"
-              echo "✅ Auto-staged $CURSOR_DST"
-            fi
-          '
-        files: ^STYLEGUIDE\.md$
         pass_filenames: false
-        priority: 1
+        types_or: [python, pyi]
+        verbose: true
+        priority: 4

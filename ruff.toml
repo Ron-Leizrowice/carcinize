@@ -80,9 +80,7 @@ select = [
   "DJ",     # [Django specific linting rules](https://docs.astral.sh/ruff/rules/#flake8-django-dj)
   "NPY",    # [NumPy specific linting rules](https://docs.astral.sh/ruff/rules/#flake8-numpy-npy)
   "PD",     # [Pandas specific linting rules](https://docs.astral.sh/ruff/rules/#flake8-pandas-pd)
-
-  # Optional
-  # "S",      # [Opinionated rules from Bandit regarding security](https://docs.astral.sh/ruff/rules/#flake8-bandit-s)
+  "S",      # [Opinionated rules from Bandit regarding security](https://docs.astral.sh/ruff/rules/#flake8-bandit-s)
 ]
 ignore = [
   "COM812",   # Disabled for compatibility with ruff formatter
@@ -100,7 +98,7 @@ ignore = [
 ]
 
 [lint.per-file-ignores]
-"tests/*" = [ 
+"tests/*" = [
   "ANN201",   # Tests usually return None anyway, we don't need to annotate them
   "D103",     # Tests probably don't need docstrings
   "INP001",   # Tests are not part of the package and don't need __init__.py files
