@@ -80,7 +80,8 @@ class OnceCell[T]:
             if not self._initialized:
                 self._value = f()
                 self._initialized = True
-            return self._value
+            # cast: _value is T (not None) when _initialized is True
+            return cast(T, self._value)
 
     def set(self, value: T) -> Result[None, OnceCellAlreadyInitializedError]:
         """Set the value. Returns Err if already initialized.
@@ -159,7 +160,8 @@ class Lazy[T]:
             if not self._computed:
                 self._value = self._init()
                 self._computed = True
-            return self._value
+            # cast: _value is T (not None) when _computed is True
+            return cast(T, self._value)
 
     def is_computed(self) -> bool:
         """Check if the value has been computed.

@@ -1,384 +1,192 @@
-# Python Development Guide
+# Style Guide
 
-This project targets **Python 3.14**. Write code that uses modern syntax, modern typing, and the modern standard library. Avoid legacy patterns unless there's a clear, documented reason.
+Read this before writing, editing, or reviewing any code in this project.
 
-This guide exists to reduce friction in reviews and production incidents: consistent patterns, predictable failure modes, and a strong bias toward clarity.
+This guide covers decisions that **aren't** already enforced by tooling. Formatting, import ordering, unused imports, and basic lint rules are handled by `ruff`. Type correctness is handled by `ty` and `pyrefly`. If a tool can catch it, it isn't repeated here.
 
----
-
-## Engineering Philosophy
-
-### Clean code (clarity wins)
-
-- Optimize for the next reader: code is read more than written.
-- Make intent obvious: descriptive names, straightforward control flow, explicit data shapes.
-- Avoid cleverness: if it needs a comment to explain, it likely needs a refactor.
-
-### DRY (but don’t worship it)
-
-- Avoid duplication of *knowledge*, not duplication of *syntax*.
-- Local duplication is acceptable if it improves readability.
-- Deduplicate when:
-  - the same bug was fixed twice, or
-  - the same invariant/logic appears in multiple places, or
-  - behavior must stay consistent across features.
-
-### Fast-fail and fail loudly
-
-- Validate early at boundaries (config, API input, file contents, env vars).
-- Fail on invalid states with clear exceptions and messages.
-- Use assertions only for programmer errors/invariants (not user input).
-
-### Exceptions are signal, not noise
-
-- Do not swallow exceptions.
-  - Never use bare `except:`.
-  - Never “log and continue” unless the component is explicitly designed to degrade gracefully.
-- Don’t hide root causes.
-  - If translating exceptions, use `raise NewError(...) from e` to preserve causality.
-- Catch only what you can meaningfully handle, usually near boundaries.
-
-### Refactor over tech debt
-
-- Don’t stack hacks: if it feels brittle, refactor while context is fresh.
-- Refactor when:
-  - a function grows beyond easy comprehension,
-  - you add conditionals to conditionals,
-  - behavior can’t be described in one sentence,
-  - you’re tempted to add “one more special case”.
-- Leave code better than you found it (naming, structure, types).
-
-### Use libraries; don’t reinvent solved problems
-
-- Prefer well-maintained libraries for common domains (CLI, HTTP, retries, validation, rendering, parsing).
-- Before implementing something non-trivial: check existing libraries and evaluate
-  - maintenance activity, tests, API quality, license, adoption.
-- If used broadly, wrap third-party libraries behind small interfaces.
-
-### Backwards compatibility is optional (unless requested)
-
-- Default stance: do not maintain backwards compatibility “just in case”.
-- If compatibility is required, state it explicitly (supported versions + migration plan).
-- Prefer breaking changes with clear migration over accumulating legacy flags/paths.
-
-### Tests protect behavior
-
-- Write tests that protect behavior, not implementation details.
-- Bugs fixed → test added.
+For tooling setup and commands, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
-## General Principles
+## Design Principles
 
-- **Strict typing:** No `Any`. Prefer precise types and make invalid states unrepresentable where practical.
-  - If something is unknown, model it as `object` and narrow via validation/parsing.
-- **Small surfaces:** Prefer small, well-named units of behavior over monoliths, but avoid thin wrappers that add indirection without meaning.
-- **Paths:** Always use `pathlib.Path` instead of `os.path`.
-- **Async:** Use async I/O for I/O-bound work. Prefer structured concurrency (`asyncio.TaskGroup`).
-- **Boundaries:** Convert untyped input into typed models as early as possible; keep the interior of the system strongly typed.
+### Reuse within the codebase
 
----
+Before writing new code, check if equivalent functionality exists elsewhere. Don't duplicate patterns across modules; if `_result.py` and `_option.py` need the same helper, extract it into `_base.py` or a shared internal module.
 
-## Code-Style Preferences (Project Defaults)
+### Use libraries for infrastructure; reimplement with intent
 
-These are defaults for readability and debuggability. Deviations are fine when they improve clarity or match an external interface, but should be intentional.
+The core types (`Result`, `Option`, `Struct`, `Iter`, etc.) are intentionally reimplemented from Rust. For everything around them -- validation, serialization, concurrency primitives -- prefer established libraries (Pydantic for model validation, `itertools` for iterator plumbing, `threading.Lock` for synchronization).
 
-### Prefer named return types over tuples
+### Stability
 
-- Avoid returning tuples in most cases.
-- Return a `@dataclass(slots=True)` or `BaseModel` when multiple values belong together.
-- Tuples are acceptable for:
-  - very small algorithmic helpers in tight local scope where meaning is obvious, or
-  - Python/stdlib APIs that naturally return tuples when the result is used immediately.
+This is a published PyPI package. Breaking changes to the public API (anything in `__all__`) require a semver version bump. Internal modules (prefixed with `_`) can change freely. Don't accumulate backwards-compatibility shims for internal code.
 
-### Don’t pass raw dictionaries around internally
+### Refactor early
 
-- Dictionaries are allowed at boundaries where libraries force them (JSON/YAML/etc.).
-- Inside the codebase, prefer:
-  - `@dataclass(slots=True, kw_only=True)` for internal domain/data flow
-  - `BaseModel` for validated boundary inputs/outputs
-- Raw dicts are acceptable only as *arbitrary mappings* (schema not owned by us), and should be typed as `Mapping[...]`, not `dict[...]`.
+Don't stack hacks. Refactor when a function grows beyond easy comprehension, when you're adding conditionals to conditionals, or when behavior can't be described in one sentence.
 
-### Avoid silent fallbacks like `d.get("key", "")`
+### Exceptions are signal
 
-- Default values in `.get()` can hide missing data and make bugs harder to trace.
-- Prefer:
-  - `d["key"]` for required keys (fail fast with a clear error)
-  - `d.get("key")` returning `None` for optional keys, handled explicitly
-  - boundary parsing into a model that enforces required/optional fields
-- If a default is genuinely desired, apply it explicitly after validation and with a clear name.
-
-### Avoid trivial one-liner functions
-
-A function should either reduce cognitive load or enforce a boundary.
-
-- Don’t create wrappers that only rename or forward a single expression.
-- A function is justified when it:
-  - names a concept that improves understanding, **or**
-  - enforces an invariant, **or**
-  - isolates boundary/I/O behavior, **or**
-  - is reused across call sites (or is very likely to be)
-- Inline simple logic when a function would add indirection without meaning.
-
-### Enum mapping: prefer behavior on the enum
-
-- Avoid separate “mapping dicts” from enum variants to values/handlers.
-- Prefer `@property` or methods on the enum to keep mapping logic co-located and type-checked.
-- Exception: use an external mapping only for plugin/registry-style extensibility or configuration-driven dispatch.
-
-### Keyword-only booleans
-
-- If a function takes boolean flags, make them keyword-only:
-  - `def f(x: int, *, strict: bool = True) -> int: ...`
-- Positional booleans harm readability at call sites.
-
-### Prefer explicit `None` over sentinel-y defaults
-
-- If “missing” is meaningful, represent it with `None` (or a dedicated type), not `""`, `0`, `[]`, etc.
-- Keep “absence” distinct from “empty”.
+Don't swallow exceptions. If translating exceptions, use `raise NewError(...) from e` to preserve the cause chain. Catch only what you can meaningfully handle.
 
 ---
 
-## Data Modeling (Strict)
+## Architecture
 
-Avoid dictionaries for internal data transfer, domain objects, and config.
+### Variant types (Ok/Err, Some/Nothing)
 
-### Decision matrix
+Each variant type is a separate class. Both variants of a pair implement the same set of methods with the same signatures. The "wrong" variant's methods either return `self` unchanged, return a default, or raise. This means callers never need to check which variant they have before calling a method.
 
-1. **Internal logic:** `@dataclass(slots=True)`
-2. **Validation/serialization/config (boundaries):** Pydantic `BaseModel` with strict validation.
-
-### Defaults and invariants
-
-- Prefer constructors that enforce invariants.
-- Prefer `kw_only=True` for dataclasses when argument order would be unclear.
-- Prefer immutability for value objects: `@dataclass(frozen=True, slots=True, kw_only=True)`.
-
-### Boundary rule (dicts only at the edge)
-
-Some libraries return dicts (e.g., `json.load`, `yaml.load`). That's fine at the boundary:
-
-- Parse → validate → convert immediately into a pydantic model.
-- Do not pass raw dicts around internally.
-
-### Arbitrary mappings
-
-Sometimes you do not own the schema (e.g., labels, headers, tags, opaque metadata). In these cases:
-
-- Use a typed mapping interface such as `Mapping[str, str]` (or a project-specific JSON type alias).
-- Keep it at the edge where possible; avoid letting “bag of fields” data seep into domain logic.
-
----
-
-## Type System (Python 3.13+ Modern Typing)
-
-This project requires Python 3.13+ and uses modern typing features from PEPs 695, 696, 742, and 758.
-
-### Core conventions
-
-- Use built-in collections and unions:
-  - Good: `list[int]`, `dict[str, str]`, `T | None`
-  - Avoid: `List[int]`, `Dict[str, str]`, `Optional[T]`
-
-### Type parameters (PEP 695)
-
-- Type variables: `def identity[T](x: T) -> T: ...`
-- Constrained: `def clamp[T: (int, float)](x: T, lo: T, hi: T) -> T: ...`
-- Bounded: `def process[E: Exception](err: E) -> str: ...`
-- ParamSpecs: `def timed[**P, R](f: Callable[P, R]) -> Callable[P, R]: ...`
-
-### Type parameter defaults (PEP 696)
-
-Use defaults for optional type parameters to reduce boilerplate:
+The pattern for a method that the "wrong" variant ignores:
 
 ```python
-# Good: default type parameter
-class Container[T = object]:
-    def __init__(self, value: T) -> None: ...
+# On Ok: actually uses the function
+def map[U](self, f: Callable[[T_co], U]) -> Ok[U]:
+    return Ok(f(self.value))
 
-# Good: function with default
-def parse[T = str](data: bytes, as_type: type[T] = str) -> T: ...
-
-# Callers can omit the type argument when the default is appropriate
-c = Container(42)      # Container[int] inferred
-c = Container[str]()   # Explicit when needed
+# On Err: ignores the function, returns self
+def map[U](self, f: Callable[[Never], U]) -> Err[E_co]:  # noqa: ARG002
+    return self
 ```
 
-### Type aliases
+Key details:
 
-- Use `type` statement: `type UserId = int`
-- Aliases are lazily evaluated (PEP 649), so forward references work without quotes
+- Use `Never` as the callable's input type on the "wrong" variant. This makes the type checker prove the function is never actually called.
+- Suppress `ARG002` (unused argument) with `# noqa: ARG002` on the "wrong" variant. No explanation needed; the pattern is understood project-wide.
+- Both variants must have identical method names and positional parameter names.
 
-### Narrowing (PEP 742)
+### Immutability
 
-- Prefer `TypeIs[T]` over `TypeGuard[T]` for type narrowing:
-  - `TypeIs` narrows in both branches (true → T, false → not T)
-  - `TypeGuard` only narrows in the true branch
+Variant types (`Ok`, `Err`, `Some`, `Nothing`) are frozen dataclasses:
 
 ```python
-from typing import TypeIs
-
-def is_str_list(val: list[object]) -> TypeIs[list[str]]:
-    return all(isinstance(x, str) for x in val)
-
-def process(items: list[object]) -> None:
-    if is_str_list(items):
-        # items is list[str] here
-        print(items[0].upper())
-    else:
-        # items is still list[object] here (narrowed with TypeIs)
-        pass
+@final
+@dataclass(frozen=True, slots=True)
+class Ok(Generic[T_co]):
+    value: T_co
 ```
 
-### Overrides
+- `@final` prevents subclassing. All variant types are final.
+- `frozen=True` prevents mutation after construction.
+- `slots=True` for memory efficiency.
 
-- Use `@override` from `typing` on overridden methods.
+To mutate fields on a frozen dataclass during `__post_init__` (as `Err` does for origin tracking), use `object.__setattr__`:
 
-### Known type system limitations
-
-Some patterns cannot be fully expressed in Python's type system:
-
-- **Variadic unions**: There's no way to express "the union of all types in `*args`". When a function accepts `*exception_types: type[Exception]`, the return type cannot be `Result[T, E1 | E2 | ...]`. Use the base type (`Exception`) and document the limitation.
-- **Comparable bounds**: Methods like `min()`, `max()`, `sorted()` require comparable types, but there's no standard `SupportsLessThan` bound. Document the requirement in the docstring and accept runtime failures for non-comparable types.
-
----
-
-## Control Flow & Syntax
-
-### Pattern matching vs. isinstance
-
-- Use `match/case` for shape/variant dispatch.
-- Use `isinstance(...)` for simple type checks.
-- Never use `type(x) == MyType`.
-
-### Exception handling (PEP 758)
-
-- Use bracketless syntax for multiple exceptions (Python 3.14+):
-  - Good: `except ValueError, TypeError:`
-  - Avoid: `except (ValueError, TypeError):`
-- Use parentheses only when capturing with `as`:
-  - `except (ValueError, TypeError) as e:`
-- Use `except*` when handling exception groups from concurrent execution.
-
----
-
-## Async Concurrency & I/O
-
-- Prefer `asyncio.TaskGroup()` over `asyncio.gather()`.
-- Prefer scoped timeouts: `asyncio.timeout(...)`.
-- For blocking work, use `await asyncio.to_thread(...)`.
-- Treat cancellation as normal control flow; don’t swallow cancellation errors.
-
----
-
-## Testing Guidelines (Behavior-Focused)
-
-We already use a static type checker. Tests should be used conservatively and focus on **behavior** and **contracts**, not type trivia.
-
-### What to test
-
-Write tests when they meaningfully reduce risk:
-
-- **Business rules and invariants**
-  - Any logic that encodes product/engineering rules belongs in tests.
-- **Boundary behavior**
-  - Parsing/validation of external input (API payloads, config, env vars, file formats).
-  - Error types and messages that callers depend on.
-- **Bug fixes**
-  - Every bug fix should include a regression test.
-- **Tricky logic / edge cases**
-  - Date math, rounding, pagination, retries, normalization, escaping, state machines.
-- **Integration seams**
-  - Interactions with external systems (HTTP, filesystem, subprocess), using fakes/stubs where appropriate.
-
-### What not to test
-
-Avoid low-value tests that add maintenance cost:
-
-- Trivial tests for “it accepts these types” or “returns this type”.
-- Tests that mirror the implementation (asserting internal helper calls, exact intermediate steps).
-- Tests that lock down incidental details (ordering of dict keys, internal log lines) unless it is a contract.
-
-### A good test is a contract
-
-A test should answer: *what must remain true as the implementation evolves?*
-
-- Prefer asserting on externally observable outcomes: returned values, state changes, emitted events, persisted records, raised exceptions.
-- Don’t over-mock. If mocking becomes the test, it’s usually a smell.
-- If you need heavy mocking, consider extracting an interface and testing through that boundary.
-
-### Test levels: choose the cheapest that still proves behavior
-
-- **Unit tests:** pure logic and invariants (fast, cheap).
-- **Contract tests:** boundaries (input → validated model or specific error).
-- **Integration tests:** critical seams (use test doubles or local containers where available).
-- Avoid over-indexing on integration tests; use them for a small number of high-value paths.
-
-### Determinism and stability
-
-- Freeze time when time matters.
-- Control randomness (seed or property-based testing).
-- Avoid relying on global state; prefer fixtures that build explicit state.
-- Don’t hit the network in unit tests.
-
-### Property-based testing (Hypothesis)
-
-Use Hypothesis when the input space is large or edge cases matter:
-
-- parsers/serializers
-- normalization/escaping
-- merge/diff logic
-
----
-
-## Opinionated Library Choices
-
-The goal is consistency and leverage: pick a small set of excellent, well-supported libraries and standardize on them.
-
-### CLI
-
-- **click** for CLI structure and ergonomics.  [click.palletsprojects.com](https://click.palletsprojects.com/)
-- **rich** for terminal rendering (tables, progress, tracebacks, formatting).  [rich.readthedocs.io](https://rich.readthedocs.io/en/stable/reference/console.html)
-- Optional: **rich-click** to render Click help output via Rich.  [PyPI](https://pypi.org/project/rich-click/)
-
-### Validation / configuration
-
-- **pydantic** for validation and serialization at boundaries, with strict mode when appropriate.  [Pydantic](https://docs.pydantic.dev/latest/concepts/strict_mode/)
-- **pydantic-settings** for environment-driven configuration (12-factor style).  [Pydantic](https://docs.pydantic.dev/latest/concepts/pydantic_settings/)
-
-### HTTP + resilience
-
-- **httpx** for HTTP clients (sync and async, prefer async in async services).  [python-httpx.org](https://www.python-httpx.org/async/)
-- **tenacity** for retries/backoff (explicit retry policies, never “magic”).  [tenacity.readthedocs.io](https://tenacity.readthedocs.io/en/latest/)
-
-### Logging
-
-- Prefer stdlib `logging` semantics; avoid print statements.
-- In exception handlers, use `logger.exception("Helpful message with context", extra={...})` to preserve tracebacks.
-
-### Testing
-
-- **pytest** as the default test runner.  [docs.pytest.org](https://docs.pytest.org/)
-- **pytest-asyncio** for async tests.  [pytest-asyncio.readthedocs.io](https://pytest-asyncio.readthedocs.io/en/latest/)
-- **hypothesis** for property-based tests when input spaces are large or edge cases matter.  [hypothesis.readthedocs.io](https://hypothesis.readthedocs.io/en/latest/)
-
-> Adding a new dependency is fine when it’s clearly better than building/maintaining our own. Wrap widely-used third-party libraries behind small interfaces when appropriate. Deviations from the baseline should include a short justification in the PR description.
-
----
-
-## Entry Points: Always use `[project.scripts]`
-
-### Rule
-
-- Do not treat `.py` files as “executables” in the repo.
-- If something is meant to be run by humans/CI as a command, it must be exposed as an entry point via:
-  - `pyproject.toml` → `[project.scripts]`  [packaging.python.org](https://packaging.python.org/en/latest/specifications/pyproject-toml/)
-
-This aligns with modern packaging standards and ensures cross-platform command wrappers are generated (especially important on Windows). Click explicitly recommends packaging CLIs with entry points rather than relying on `if __name__ == "__main__": ...`.  [click.palletsprojects.com](https://click.palletsprojects.com/en/stable/quickstart/)
-
-### Example
-
-```toml
-[project.scripts]
-my-tool = "my_package.cli:main"
+```python
+def __post_init__(self) -> None:
+    object.__setattr__(self, "_origin", _capture_origin())
 ```
+
+### `__slots__` everywhere
+
+All classes define `__slots__`. For dataclasses, `slots=True` handles it. For regular classes, declare explicitly:
+
+```python
+class Iter[T](RustType):
+    __slots__ = ("_iter",)
+```
+
+### Covariance
+
+PEP 695 inline type parameters (`class Foo[T]`) don't support variance annotations. When a class needs covariant type parameters, use old-style `TypeVar` with `Generic`:
+
+```python
+T_co = TypeVar("T_co", covariant=True)
+
+class Ok(Generic[T_co]):  # noqa: UP046 - Generic required for covariance
+    value: T_co
+```
+
+Suppress `UP046` with a `# noqa` comment. New types that hold immutable data and only produce (never consume) their type parameter should be covariant.
+
+### Circular imports
+
+`_result.py` and `_option.py` depend on each other (e.g., `Ok.ok()` returns `Some`). This is resolved with:
+
+1. `if TYPE_CHECKING:` imports for annotations
+2. Local imports inside method bodies for runtime
+
+```python
+if TYPE_CHECKING:
+    from carcinize._option import Some
+
+# Then inside the method:
+def ok(self) -> Some[T_co]:
+    from carcinize._option import Some  # noqa: PLC0415
+    return Some(self.value)
+```
+
+Follow this same pattern if adding new cross-module dependencies.
+
+### Type system workarounds: `cast()` vs. `ty:ignore` / `noqa`
+
+These solve different problems. Use the right one.
+
+**`cast()` -- "I know the type; the checker can't prove it."** Use when a value's type is narrower than what the checker infers, and you can state an invariant that guarantees it. Always comment the invariant:
+
+```python
+# cast: _value is T (not None) when _initialized is True
+return Some(cast(T, self._value))
+```
+
+`cast()` is preferred over type-ignore comments for value types because it documents the intended type explicitly, is narrowly scoped to one expression, and won't accidentally suppress unrelated errors on the same line.
+
+**`ty:ignore` / `noqa` -- "the operation is valid; the checker can't model it."** Use when the checker is wrong about whether something is *permitted*, not about what type something *is*. Typical cases: metaclass dynamics, `object.__setattr__` on frozen dataclasses, or linter rules that conflict with a deliberate pattern. Always include the rule code:
+
+```python
+cls.__match_args__ = tuple(cls.model_fields.keys())  # ty:ignore[unresolved-attribute]
+class Ok(Generic[T_co]):  # noqa: UP046 - Generic required for covariance
+```
+
+Brief reasons are encouraged. For project-wide patterns like `ARG002` on variant methods, the rule code alone is sufficient.
+
+---
+
+## Error Handling
+
+### When to return `Result` vs. raise
+
+- **Return `Result[T, E]`** from public API methods that represent operations which can fail as part of normal usage (parsing, validation, fallible conversions like `Struct.try_from()`).
+- **Raise exceptions** for programming errors that indicate a bug: invalid arguments (`ValueError` for a negative step in `Iter.step_by`), violated contracts (`UnwrapError` from `unwrap()`), and states that should be impossible.
+
+### Error context
+
+`Err` automatically captures its creation site. Contributors can add richer context:
+
+- `.context("while doing X")` -- high-level description of the operation
+- `.note(f"key={value}")` -- debugging details (variable values, state)
+
+Both are no-ops on `Ok`, so they can be chained unconditionally.
+
+---
+
+## Docstrings
+
+Use Google-style docstrings. Include `Args:` and `Returns:` sections when they add information beyond what the signature already says. Omit them on simple methods like `is_ok()` or `unwrap()`.
+
+```python
+def try_except(
+    f: Callable[[], T],
+    *exception_types: type[Exception],
+) -> Result[T, Exception]:
+    """Execute a function and capture any exceptions as an Err.
+
+    Args:
+        f: The function to execute.
+        *exception_types: Exception types to catch. Catches all if omitted.
+
+    Returns:
+        Ok(result) if the function succeeds, Err(exception) if it raises.
+    """
+```
+
+---
+
+## Testing
+
+- Test files mirror source modules: `_result.py` -> `test_result.py`.
+- Cross-module integration tests go in separate files (`test_integration.py`).
+- Prefer flat test functions. Use `Test*` classes only to group tests that share fixtures.
+- Name tests after the behavior: `test_ok_map_transforms_value`, not `test_map_1`.
+- `xfail_strict = true` is configured globally. An xfail test that passes will fail the suite. Only mark tests as xfail for known, tracked issues.

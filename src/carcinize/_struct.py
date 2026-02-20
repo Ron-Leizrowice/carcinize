@@ -17,7 +17,6 @@ Both include:
     - Functional updates via replace()
     - Serialization via as_dict() and as_json()
     - Parsing via try_from()
-
 """
 
 from __future__ import annotations
@@ -30,18 +29,6 @@ from pydantic_core import PydanticCustomError
 
 from carcinize._base import RustType
 from carcinize._result import Err, Ok, Result
-
-# =============================================================================
-# Base Configuration
-# =============================================================================
-
-_BASE_CONFIG: dict[str, object] = {
-    "extra": "forbid",
-    "strict": True,
-    "validate_default": True,
-    "validate_assignment": True,
-    "use_enum_values": True,
-}
 
 
 def _frozen_setattr(self: BaseModel, name: str, value: object) -> NoReturn:
@@ -93,7 +80,14 @@ class _StructMeta(ModelMetaclass):
         if not is_struct_base:
             # Configure mutability for user-defined classes
             namespace["__mutable__"] = mut
-            namespace["model_config"] = ConfigDict(**_BASE_CONFIG, frozen=not mut)
+            namespace["model_config"] = ConfigDict(
+                extra="forbid",
+                strict=True,
+                validate_default=True,
+                validate_assignment=True,
+                use_enum_values=True,
+                frozen=not mut,
+            )
 
             if mut:
                 # Mutable structs use standard Pydantic setattr (allows assignment)
@@ -102,7 +96,7 @@ class _StructMeta(ModelMetaclass):
                 # Immutable structs use our explicit-raise setattr
                 namespace["__setattr__"] = _frozen_setattr
 
-        cls = super().__new__(mcs, name, bases, namespace, **kwargs)  # ty:ignore[invalid-argument-type]
+        cls = super().__new__(mcs, name, bases, namespace, **kwargs)  # ty:ignore[invalid-argument-type] #pyrefly:ignore[bad-argument-type]
 
         # Set up pattern matching
         cls.__match_args__ = tuple(cls.model_fields.keys())  # ty:ignore[unresolved-attribute]
@@ -196,6 +190,10 @@ class Struct(_StructBase, metaclass=_StructMeta):
     __setattr__ = _frozen_setattr  # type: ignore[method-assign,assignment]
 
     model_config = ConfigDict(
-        **_BASE_CONFIG,
+        extra="forbid",
+        strict=True,
+        validate_default=True,
+        validate_assignment=True,
+        use_enum_values=True,
         frozen=True,
     )

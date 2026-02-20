@@ -39,6 +39,9 @@ skip-magic-trailing-comma = false
 # -----------------------------------------------------------------------------
 [lint]
 select = [
+  # Public code should have docstrings
+  "D100", "D101", "D102", "D103", "D104",
+  "D200",   # Remove unnecessary newlines at start and end of docstrings
   "ERA",    # [Disallow commented-out code](https://docs.astral.sh/ruff/rules/#eradicate-era)
   "YTT",    # [Ensure correct usage of `sys.version`](https://docs.astral.sh/ruff/rules/#flake8-2020-ytt)
   "ANN",    # [Enforces PEP 3107 – Function Annotations](https://docs.astral.sh/ruff/rules/#flake8-annotations-ann)
@@ -48,11 +51,9 @@ select = [
   "A",      # [Check for python builtins being used as variables or parameters.](https://docs.astral.sh/ruff/rules/#flake8-builtins-a)
   "COM",    # [Opinionated rules regarding trailing commas](https://docs.astral.sh/ruff/rules/#flake8-commas-com)
   "C4",     # [Opinionated rules regarding comprehensions](https://docs.astral.sh/ruff/rules/#flake8-comprehensions-c4)
-  "DTZ",    # [Bans usage of unsafe naive datetime class](https://docs.astral.sh/ruff/rules/#flake8-datetimez-dtz)
   "FA",     # [Ensures usage of `__future__` imports](https://docs.astral.sh/ruff/rules/#flake8-future-imports-fa)
   "ISC",    # [Rules regarding implicit string concatenation](https://docs.astral.sh/ruff/rules/#flake8-implicit-str-concat-isc)
   "ICN",    # [Opinionated rules regarding import conventions](https://docs.astral.sh/ruff/rules/#flake8-import-conventions-icn)
-  "LOG",    # [Opinionated rules regarding logging](https://docs.astral.sh/ruff/rules/#flake8-logging-format-log)
   "INP",    # [Requires `__init__.py` files to be present](https://docs.astral.sh/ruff/rules/#flake8-no-pep420-inp)
   "PIE",    # [Misc flake8 lints](https://docs.astral.sh/ruff/rules/#flake8-pie-pie)
   "PYI",    # [Opinionated rules regarding type annotations](https://docs.astral.sh/ruff/rules/#flake8-pyi-pyi)
@@ -70,7 +71,6 @@ select = [
   "PERF",   # [Performance related linting rules](https://docs.astral.sh/ruff/rules/#flake8-performance-perf)
   "E",      # [Pycodestyle Errors](https://docs.astral.sh/ruff/rules/#pycodestyle-e)
   "W",      # [Pycodestyle Warnings](https://docs.astral.sh/ruff/rules/#pycodestyle-w)
-  "D",      # [Docstring linting rules](https://docs.astral.sh/ruff/rules/#pydocstyle-d)
   "F",      # [Pyflakes linting rules](https://docs.astral.sh/ruff/rules/#pyflakes-f)
   "PL",     # [Type checking linting rules](https://docs.astral.sh/ruff/rules/#mypy-pl)
   "UP",     # [Automatically upgrades syntax to newer python versions](https://docs.astral.sh/ruff/rules/#pyupgrade-up)
@@ -78,20 +78,10 @@ select = [
   "RUF",    # [Ruff specific linting rules](https://docs.astral.sh/ruff/rules/#ruff-ruff)
   "FAST",   # [FastAPI specific linting rules](https://docs.astral.sh/ruff/rules/#flake8-fastapi-fast)
   "DJ",     # [Django specific linting rules](https://docs.astral.sh/ruff/rules/#flake8-django-dj)
-  "NPY",    # [NumPy specific linting rules](https://docs.astral.sh/ruff/rules/#flake8-numpy-npy)
-  "PD",     # [Pandas specific linting rules](https://docs.astral.sh/ruff/rules/#flake8-pandas-pd)
-
-  # Optional
-  # "S",      # [Opinionated rules from Bandit regarding security](https://docs.astral.sh/ruff/rules/#flake8-bandit-s)
+  "S",      # [Opinionated rules from Bandit regarding security](https://docs.astral.sh/ruff/rules/#flake8-bandit-s)
 ]
 ignore = [
   "COM812",   # Disabled for compatibility with ruff formatter
-  "D105",     # Allow no docstring for magic methods
-  "D107",     # Allow no docstring for __init__ methods
-  "D202",     # Allow blank lines after function docstrings
-  "D203",     # Do not insert an extra linebreak for class docstrings
-  "D213",     # We want docstrings to start on the first line, not the second.
-  "D413",     # Don't require a blank line after returns in docstrings.
   "E501",     # Allow long lines (we use ruff formatter)
   "N815",     # Allow camelCase attributes (useful for creating pydantic models)
   "S101",     # Allow use of assert statements (unless you are actually using `-O` to optimize your code)
@@ -100,7 +90,7 @@ ignore = [
 ]
 
 [lint.per-file-ignores]
-"tests/*" = [ 
+"tests/*" = [
   "ANN201",   # Tests usually return None anyway, we don't need to annotate them
   "D103",     # Tests probably don't need docstrings
   "INP001",   # Tests are not part of the package and don't need __init__.py files

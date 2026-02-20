@@ -12,7 +12,11 @@ Try Carcinization! 🦀 🦀 🦀
 
 As I have fully drunk the Rust kool-aid, I am now fully committed to the idea that everything should be a crab. Including Python.
 
-Another equally valid interpretation is it's a verb form of "carcinogen", because using this library will give your Python projects cancer. Who's to say which is correct?
+Another equally valid interpretation is it's a verb form of "carcinogen", because using this library might give you cancer. Who's to say which is correct?
+
+## Is it... 🔥 Blazingly Fast™? 🚀
+
+No. No it is not. Actually it's probably going to make your code a lot slower. But it's fun and if you cared about performance you probably wouldn't be using python, let alone experimental libraries like this anyway.
 
 ## Installation
 
@@ -22,7 +26,7 @@ Install with uv:
 uv add carcinize
 ```
 
-No I won't add examples for `pip`, `poetry`, or **dry-heave**... `conda`.
+No I won't add examples for `pip`, `poetry`, or ...🤮... `conda`. It's 2026, grow up and use `uv`.
 
 It's 2026, grow up and use `uv`.
 

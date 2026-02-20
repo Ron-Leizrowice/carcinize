@@ -431,18 +431,21 @@ class TestErrOriginalTracebackPreservation:
     def test_caught_exception_preserves_traceback(self) -> None:
         """When Err wraps a caught exception, original traceback should be preserved."""
 
-        def function_that_raises() -> None:
-            raise ValueError("original error")
+        class CustomError(ValueError):
+            pass
 
-        try:
+        def function_that_raises() -> None:
+            raise CustomError("original error")
+
+        with pytest.raises(CustomError) as exc_info:
             function_that_raises()
-        except ValueError as e:
-            err = Err(e)
+
+        err = Err(exc_info.value)
 
         # original_traceback is now a typed property on Err itself
         assert err.original_traceback is not None
 
-        with pytest.raises(ValueError, match="original error") as exc_info:
+        with pytest.raises(ValueError, match="original error"):
             err.unwrap()
 
         # Check that notes include original raise location

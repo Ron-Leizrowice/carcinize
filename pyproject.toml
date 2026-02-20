@@ -12,11 +12,6 @@ authors = [
   { name = "Ron Leizrowice", email = "ron.leizrowice@protonmail.com" },
 ]
 requires-python = ">=3.13"
-classifiers = [
-  "Programming Language :: Python :: 3 :: Only",
-  "Programming Language :: Python :: 3.13",
-  "Programming Language :: Python :: 3.14",
-]
 dependencies = [
   "pydantic>=2",
   "pydantic-core>=2",
@@ -24,21 +19,27 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-  "deptry>=0.23",
+  "deptry>=0.24",
   "prek>=0.3",
   "pyproject-fmt>=2",
+  "pyrefly>=0.53",
   "pytest>=8",
   "pytest-asyncio>=1",
-  "ruff>=0.14",
-  "ty>=0.0.14",
+  "ruff>=0.15",
+  "rumdl>=0.1",
+  "ty>=0.0.17",
 ]
 
-[tool.uv]
-cache-dir = ".cache/uv"
+[tool.deptry.per_rule_ignores]
+DEP001 = [ "carcinize" ]
+DEP003 = [ "carcinize" ]
 
 [tool.pyproject-fmt]
 indent = 2
+table_format = "long"
 keep_full_version = false
+generate_python_version_classifiers = false
+collapse_tables = [ "project.authors" ]
 
 [tool.pytest.ini_options]
 testpaths = [ "tests" ]
@@ -50,5 +51,18 @@ asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
 cache_dir = ".cache/pytest"
 
+[tool.pyrefly]
+enabled-ignores = [ "pyrefly" ]
+
 [tool.ty.analysis]
 respect-type-ignore-comments = false
+[tool.ty.rules]
+redundant-cast = "ignore"
+
+[tool.rumdl]
+disable = [ "MD013" ]
+exclude = [
+  ".cache/**",
+  ".venv/**",
+]
+cache-dir = ".cache/rumdl"

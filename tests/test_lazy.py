@@ -165,7 +165,7 @@ class TestLazyBasics:
             return 42
 
         lazy = Lazy(init)
-        assert computed is False
+        assert not computed
         assert lazy.is_computed() is False
 
     def test_get_computes_value(self) -> None:
